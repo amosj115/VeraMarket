@@ -1,0 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+
+type TargetType = "LISTING" | "SHOP" | "SHOP_PRODUCT" | "SERVICE" | "PROPERTY";
+export function FavoriteToggle({ targetType, targetId }: { targetType: TargetType; targetId: string }) { const { data: session } = useSession(); const router = useRouter(); const [saved, setSaved] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); useEffect(() => { if (!session) return; fetch(`/api/favorites?targetType=${targetType}&targetId=${targetId}`).then((response) => response.json()).then((data) => setSaved(Boolean(data.favorited))).catch(() => setError("Could not load favorite status.")); }, [session, targetId, targetType]); async function toggle() { if (!session) return router.push(`/login?callbackUrl=${encodeURIComponent(location.pathname)}`); setBusy(true); setError(null); const response = await fetch("/api/favorites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetType, targetId }) }); const data = await response.json(); if (response.ok) setSaved(data.favorited); else setError(data.error ?? "Could not update favorites."); setBusy(false); } return <div className="mt-5"><button disabled={busy} onClick={toggle} className="rounded-md border border-brand px-4 py-2.5 text-sm font-semibold text-brand hover:bg-brand-light disabled:opacity-60">{busy ? "Saving..." : saved ? "Saved" : "Save to favorites"}</button>{error && <p className="mt-2 text-xs text-red-700">{error}</p>}</div>; }

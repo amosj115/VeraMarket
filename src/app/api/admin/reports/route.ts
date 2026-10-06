@@ -1,0 +1,8 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { reportUpdateSchema } from "@/lib/validation/report";
+
+async function adminOnly() { const session = await auth(); return session?.user && (session.user.role === "ADMIN" || session.user.role === "MODERATOR") ? session : null; }
+export async function GET() { if (!(await adminOnly())) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const reports = await prisma.report.findMany({ orderBy: { createdAt: "desc" }, include: { reporter: { select: { username: true, email: true } }, listing: { select: { title: true, slug: true } }, shop: { select: { name: true, slug: true } }, service: { select: { title: true, slug: true } }, property: { select: { title: true, slug: true } } } }); return NextResponse.json({ reports }); }
+export async function PATCH(request: NextRequest) { const session = await adminOnly(); if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const id = request.nextUrl.searchParams.get("id"); if (!id) return NextResponse.json({ error: "Report id is required" }, { status: 400 }); const parsed = reportUpdateSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "Invalid status" }, { status: 400 }); const report = await prisma.report.update({ where: { id }, data: { status: parsed.data.status, resolvedAt: ["RESOLVED", "DISMISSED"].includes(parsed.data.status) ? new Date() : null } }); await prisma.auditLog.create({ data: { actorId: session.user.id, action: `REPORT_${parsed.data.status}`, targetType: "Report", targetId: id, metadata: { status: parsed.data.status } } }); return NextResponse.json({ report }); }

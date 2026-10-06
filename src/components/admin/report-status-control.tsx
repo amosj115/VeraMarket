@@ -1,0 +1,6 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export function ReportStatusControl({ reportId, status }: { reportId: string; status: string }) { const router = useRouter(); const [busy, setBusy] = useState(false); async function update(nextStatus: string) { setBusy(true); const response = await fetch(`/api/admin/reports?id=${reportId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) }); if (response.ok) router.refresh(); setBusy(false); } return <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className="text-xs font-medium text-amber-700">{status}</span><div className="flex gap-2"><button disabled={busy} onClick={() => update("INVESTIGATING")} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:border-brand">Investigate</button><button disabled={busy} onClick={() => update("RESOLVED")} className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-dark">Resolve</button><button disabled={busy} onClick={() => update("DISMISSED")} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:border-brand">Dismiss</button></div></div>; }

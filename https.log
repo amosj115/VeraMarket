@@ -1,0 +1,13 @@
+
+> vera-market@0.1.0 dev:https
+> next dev -H 0.0.0.0 -p 3443 --experimental-https --experimental-https-key certificates/dev-key.pem --experimental-https-cert certificates/dev.pem
+
+⚠ Self-signed certificates are currently an experimental feature, use with caution.
+▲ Next.js 16.3.8 (Turbopack)
+- Local:         https://localhost:3443
+- Network:       https://0.0.0.0:3443
+- Environments: .env
+✓ Ready in 1426ms
+✓ Running next.config.ts took 138ms
+
+ GET /login 200 in 1249ms (next.js: 274ms, proxy.ts: 408ms, application-code: 567ms)

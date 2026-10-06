@@ -1,0 +1,6 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export function ListingManageActions({ listingId, status }: { listingId: string; status: string }) { const router = useRouter(); const [busy, setBusy] = useState(false); async function update(nextStatus: string) { setBusy(true); const response = await fetch(`/api/listings/${listingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }) }); if (response.ok) router.refresh(); setBusy(false); } async function remove() { if (!window.confirm("Remove this listing from the marketplace?")) return; setBusy(true); const response = await fetch(`/api/listings/${listingId}`, { method: "DELETE" }); if (response.ok) router.refresh(); setBusy(false); } return <div className="flex shrink-0 gap-2"><button disabled={busy || status === "SOLD"} onClick={() => update("SOLD")} className="rounded-md border border-border px-3 py-2 text-xs font-medium hover:border-brand">Mark sold</button><button disabled={busy || status === "REMOVED"} onClick={remove} className="rounded-md border border-border px-3 py-2 text-xs font-medium text-red-700 hover:border-red-300">Remove</button></div>; }
