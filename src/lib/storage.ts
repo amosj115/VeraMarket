@@ -1,92 +1,232 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { v2 as cloudinary } from "cloudinary";
 
 /**
- * Storage abstraction. STORAGE_DRIVER=local writes to /public/uploads (development only);
- * STORAGE_DRIVER=s3 uses any S3-compatible bucket. Objects are written private and are served
- * through S3_PUBLIC_URL (CDN / public-read prefix) only for the public image prefix "uploads/".
- * Verification/camera images are never stored here.
+ * Cloudinary image storage for Vera Market.
+ *
+ * Images are uploaded server-side using the Cloudinary API secret.
+ * The browser never receives the API secret.
  */
+
 export class StorageError extends Error {
-  constructor(message: string, public code: "NOT_CONFIGURED" | "UNAVAILABLE" | "NOT_FOUND") { super(message); }
+  constructor(
+    message: string,
+    public code: "NOT_CONFIGURED" | "UNAVAILABLE" | "NOT_FOUND"
+  ) {
+    super(message);
+    this.name = "StorageError";
+  }
 }
 
-const driver = () => (process.env.STORAGE_DRIVER === "s3" ? "s3" : "local");
+function configureCloudinary() {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return false;
+  }
+
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+
+  return true;
+}
 
 export function storageStatus() {
-  if (driver() === "local") {
-    if (process.env.NODE_ENV === "production" && process.env.ALLOW_LOCAL_STORAGE !== "true") return { configured: false, missing: ["STORAGE_DRIVER=s3"] };
-    return { configured: true, missing: [] as string[] };
-  }
-  const missing = ["S3_BUCKET", "S3_REGION", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_PUBLIC_URL"].filter((key) => !process.env[key]);
-  return { configured: missing.length === 0, missing };
-}
+  const missing = [
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+  ].filter((key) => !process.env[key]);
 
-let client: S3Client | null = null;
-function s3() {
-  client ??= new S3Client({
-    region: process.env.S3_REGION,
-    endpoint: process.env.S3_ENDPOINT || undefined,
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
-    credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID!, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY! },
-  });
-  return client;
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
 }
 
 function assertReady() {
-  const status = storageStatus();
-  if (!status.configured) throw new StorageError(`Image storage isn't configured on this server (${status.missing.join(", ")}).`, "NOT_CONFIGURED");
-}
+  if (!configureCloudinary()) {
+    const status = storageStatus();
 
-const publicBase = () => (process.env.S3_PUBLIC_URL ?? "").replace(/\/+$/, "");
-
-/** Stores an image and returns the URL to persist (relative path locally, absolute HTTPS URL for S3). */
-export async function putPublicImage(bytes: Uint8Array, ext: string, mime: string): Promise<string> {
-  assertReady();
-  const name = `${randomUUID()}.${ext}`;
-  try {
-    if (driver() === "local") {
-      const dir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(dir, { recursive: true });
-      await writeFile(path.join(dir, name), bytes);
-      return `/uploads/${name}`;
-    }
-    await s3().send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: `uploads/${name}`, Body: bytes, ContentType: mime, CacheControl: "public, max-age=31536000, immutable" }));
-    return `${publicBase()}/uploads/${name}`;
-  } catch (error) {
-    console.error("[storage] put failed", error);
-    throw new StorageError("We couldn't save your image right now. Please try again shortly.", "UNAVAILABLE");
+    throw new StorageError(
+      `Image storage isn't configured on this server (${status.missing.join(
+        ", "
+      )}).`,
+      "NOT_CONFIGURED"
+    );
   }
 }
 
-function keyFromUrl(url: string): string | null {
-  if (driver() === "local") return /^\/uploads\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(url) ? url.slice(1) : null;
-  const base = publicBase();
-  if (!base || !url.startsWith(`${base}/uploads/`)) return null;
-  const key = url.slice(base.length + 1);
-  return /^uploads\/[0-9a-f-]{36}\.(jpg|png|webp)$/.test(key) ? key : null;
+/**
+ * Upload an image to Cloudinary and return its secure HTTPS URL.
+ */
+export async function putPublicImage(
+  bytes: Uint8Array,
+  ext: string,
+  mime: string
+): Promise<string> {
+  assertReady();
+
+  const name = `${randomUUID()}`;
+
+  try {
+    const base64 = Buffer.from(bytes).toString("base64");
+
+    const dataUri = `data:${mime};base64,${base64}`;
+
+    const result = await cloudinary.uploader.upload(dataUri, {
+      folder: "vera-market/uploads",
+      public_id: name,
+      resource_type: "image",
+      type: "upload",
+      overwrite: false,
+      invalidate: true,
+      context: {
+        original_extension: ext,
+      },
+    });
+
+    return result.secure_url;
+  } catch (error) {
+    console.error("[cloudinary] upload failed", error);
+
+    throw new StorageError(
+      "We couldn't save your image right now. Please try again shortly.",
+      "UNAVAILABLE"
+    );
+  }
 }
 
-/** Server-side read of a previously stored image (authenticated S3 GET, so the bucket need not allow listing or private reads publicly). */
+/**
+ * Extract the Cloudinary public ID from a Vera Market Cloudinary URL.
+ */
+function publicIdFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+
+    if (!parsed.hostname.endsWith("cloudinary.com")) {
+      return null;
+    }
+
+    const pathname = parsed.pathname;
+
+    const uploadMarker = "/upload/";
+
+    const uploadIndex = pathname.indexOf(uploadMarker);
+
+    if (uploadIndex === -1) {
+      return null;
+    }
+
+    let publicPath = pathname.slice(uploadIndex + uploadMarker.length);
+
+    // Remove transformations such as:
+    // /upload/f_auto,q_auto/
+    const parts = publicPath.split("/");
+
+    while (
+      parts.length > 0 &&
+      /^[a-zA-Z0-9_,:=-]+$/.test(parts[0]) &&
+      (
+        parts[0].includes("w_") ||
+        parts[0].includes("h_") ||
+        parts[0].includes("c_") ||
+        parts[0].includes("q_") ||
+        parts[0].includes("f_") ||
+        parts[0].includes("dpr_") ||
+        parts[0].includes("ar_")
+      )
+    ) {
+      parts.shift();
+    }
+
+    publicPath = parts.join("/");
+
+    // Remove file extension.
+    publicPath = publicPath.replace(/\.(jpg|jpeg|png|webp|gif|avif)$/i, "");
+
+    if (!publicPath.startsWith("vera-market/uploads/")) {
+      return null;
+    }
+
+    return publicPath;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Server-side read of a previously stored Cloudinary image.
+ *
+ * This is mainly retained for compatibility with the existing
+ * Vera Market storage abstraction.
+ */
 export async function readStoredImage(url: string): Promise<Uint8Array> {
   assertReady();
-  const key = keyFromUrl(url);
-  if (!key) throw new StorageError("That image isn't in this server's storage.", "NOT_FOUND");
+
+  const publicId = publicIdFromUrl(url);
+
+  if (!publicId) {
+    throw new StorageError(
+      "That image isn't in this server's storage.",
+      "NOT_FOUND"
+    );
+  }
+
   try {
-    if (driver() === "local") return new Uint8Array(await readFile(path.join(process.cwd(), "public", key)));
-    const out = await s3().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
-    return await out.Body!.transformToByteArray();
+    const result = await cloudinary.api.resource(publicId, {
+      resource_type: "image",
+      type: "upload",
+    });
+
+    if (!result.secure_url) {
+      throw new Error("Cloudinary image URL unavailable");
+    }
+
+    const response = await fetch(result.secure_url);
+
+    if (!response.ok) {
+      throw new Error(`Image download failed: ${response.status}`);
+    }
+
+    return new Uint8Array(await response.arrayBuffer());
   } catch (error) {
-    console.error("[storage] read failed", error);
-    const missing = (error as { name?: string; code?: string }).name === "NoSuchKey" || (error as { code?: string }).code === "ENOENT";
-    throw new StorageError(missing ? "Image not found." : "Image storage is temporarily unavailable.", missing ? "NOT_FOUND" : "UNAVAILABLE");
+    console.error("[cloudinary] read failed", error);
+
+    throw new StorageError(
+      "Image storage is temporarily unavailable.",
+      "UNAVAILABLE"
+    );
   }
 }
 
-export async function deleteStoredImage(url: string | null | undefined) {
-  const key = url ? keyFromUrl(url) : null;
-  if (!key || driver() !== "s3") return;
-  await s3().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key })).catch((e) => console.error("[storage] delete failed", e));
+/**
+ * Delete an image from Cloudinary.
+ */
+export async function deleteStoredImage(
+  url: string | null | undefined
+) {
+  if (!url) return;
+
+  const publicId = publicIdFromUrl(url);
+
+  if (!publicId) return;
+
+  try {
+    assertReady();
+
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: "image",
+      type: "upload",
+      invalidate: true,
+    });
+  } catch (error) {
+    console.error("[cloudinary] delete failed", error);
+  }
 }
