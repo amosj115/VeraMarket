@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "dev:https": "next dev -H 0.0.0.0 -p 3443 --experimental-https --experimental-https-key certificates/dev-key.pem --experimental-https-cert certificates/dev.pem",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
     "admin:grant": "tsx prisma/grant-admin.ts",
