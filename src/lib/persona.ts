@@ -66,13 +66,13 @@ export const FAILURE_MESSAGES: Record<string, string> = {
   CANCELLED: "Verification was cancelled. You can start it again whenever you're ready.",
 };
 
-/** Maps a Persona inquiry status to our internal state. Only approved/completed ever verifies a user. */
+/** Maps Persona inquiry status; completion alone is not an approval decision. */
 export function mapInquiryStatus(status: string): IdentityVerificationState | null {
   switch (status) {
     case "created": return "CREATED";
     case "pending":
-    case "needs_review": return "PENDING";
     case "completed":
+    case "needs_review": return "PENDING";
     case "approved": return "APPROVED";
     case "declined": return "DECLINED";
     case "failed": return "FAILED";

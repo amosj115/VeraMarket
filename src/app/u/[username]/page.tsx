@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -7,9 +8,7 @@ import { getTrust } from "@/lib/trust";
 import { VerifiedBadge } from "@/components/profile/verified-badge";
 import { appUrl } from "@/lib/app-url";
 import { publicUrl } from "@/lib/share";
-import { cardMetadata, getShareCard, unavailableMetadata } from "@/lib/share-meta";
 import { ShareButton } from "@/components/share/share-button";
-import { SharedLinkTracker } from "@/components/share/shared-link-tracker";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +42,7 @@ export default async function PublicProfilePage({ params }: Props) {
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-col items-start gap-5 border-b border-border pb-8 sm:flex-row sm:items-center">
         {user.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt={user.displayName} className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
+          <Image src={user.avatarUrl} alt={user.displayName} width={96} height={96} sizes="96px" className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
         ) : (
           <span className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-light text-3xl font-semibold text-brand">{user.displayName[0]}</span>
         )}
@@ -74,7 +72,7 @@ export default async function PublicProfilePage({ params }: Props) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {user.listings.map((listing) => (
               <Link key={listing.id} href={`/listing/${listing.slug}`} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
-                <div className="aspect-square bg-slate-100">{listing.images[0] && /* eslint-disable-next-line @next/next/no-img-element */ <img src={listing.images[0].url} alt={listing.title} className="h-full w-full object-cover" />}</div>
+                <div className="relative aspect-square bg-slate-100">{listing.images[0] && <Image src={listing.images[0].url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />}</div>
                 <div className="p-3"><p className="truncate text-sm font-medium">{listing.title}</p><p className="mt-0.5 text-sm font-semibold text-brand">{formatZAR(listing.priceCents)}</p><p className="truncate text-xs text-slate-500">{listing.location}</p></div>
               </Link>
             ))}

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export type NotificationDto = {
   id: string;
   type: string;
@@ -74,8 +76,7 @@ export function NotificationItem({ notification, onOpen, onDelete }: { notificat
     <div className={`group relative flex items-start gap-3 px-4 py-3 ${notification.isRead ? "bg-white" : "bg-brand-light/60"}`}>
       <button type="button" onClick={() => onOpen(notification)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
         {notification.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={notification.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg bg-slate-100 object-cover" />
+          <Image src={notification.imageUrl} alt="" width={44} height={44} sizes="44px" className="h-11 w-11 shrink-0 rounded-lg bg-slate-100 object-cover" />
         ) : (
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-light text-brand">
             <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

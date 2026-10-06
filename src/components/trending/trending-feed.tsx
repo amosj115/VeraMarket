@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -123,7 +124,7 @@ function TrendingCard({ item }: { item: TrendingItem }) {
 
   return <article ref={card} className="grid overflow-hidden rounded-lg border border-border bg-white md:grid-cols-[1.15fr_0.85fr]">
     <Link href={`/listing/${item.slug}`} className="relative block aspect-[4/3] bg-slate-100 md:aspect-auto md:min-h-[22rem]" aria-label={`View ${item.title}`}>
-      {item.images[0] ? <img src={item.images[0].url} alt={item.title} loading="lazy" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-slate-400">No image</div>}
+      {item.images[0] ? <Image src={item.images[0].url} alt={item.title} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-slate-400">No image</div>}
       {item.labels.length > 0 && <div className="absolute left-3 top-3 flex flex-wrap gap-2">{item.labels.map((label) => <span key={label} className="rounded-sm bg-white/95 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm">{label}</span>)}</div>}
     </Link>
     <div className="flex flex-col p-4 sm:p-6">

@@ -17,14 +17,24 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    if (result?.error) {
-      setError("Incorrect email or password.");
+      if (result?.error) {
+        setError(
+          result.error === "CredentialsSignin"
+            ? "Incorrect email or password."
+            : "Login is temporarily unavailable. Please try again."
+        );
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setError("Login is temporarily unavailable. Please try again.");
       setLoading(false);
       return;
     }

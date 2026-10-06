@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -52,7 +53,7 @@ export default async function ListingPage({ params }: Props) {
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {related.map((item) => (
           <Link key={item.id} href={publicPath("LISTING", item.slug)} className={cardClass}>
-            <div className="aspect-square bg-slate-100">{item.images[0] ? <img src={item.images[0].url} alt={item.title} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}</div>
+            <div className="relative aspect-square bg-slate-100">{item.images[0] ? <Image src={item.images[0].url} alt={item.title} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}</div>
             <div className="p-3"><p className="truncate text-sm font-medium">{item.title}</p><p className="mt-1 text-sm font-semibold text-brand">{formatZAR(item.priceCents)}</p><p className="mt-1 truncate text-xs text-slate-500">{item.location}</p></div>
           </Link>
         ))}
@@ -96,7 +97,7 @@ export default async function ListingPage({ params }: Props) {
         <div>
           {listing.images.length ? (
             <div className="grid grid-cols-2 gap-3">
-              {listing.images.map((image, index) => <img key={image.id} src={image.url} alt={`${listing.title} photo ${index + 1}`} className={`aspect-square w-full rounded-lg bg-slate-100 object-cover ${index === 0 ? "col-span-2 sm:aspect-[4/3]" : ""}`} />)}
+              {listing.images.map((image, index) => <Image key={image.id} src={image.url} alt={`${listing.title} photo ${index + 1}`} width={1200} height={1200} sizes="(max-width: 640px) 100vw, 50vw" className={`aspect-square w-full rounded-lg bg-slate-100 object-cover ${index === 0 ? "col-span-2 sm:aspect-[4/3]" : ""}`} />)}
             </div>
           ) : <div className="flex aspect-video items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">No images</div>}
         </div>

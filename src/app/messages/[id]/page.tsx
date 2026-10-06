@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -47,7 +48,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         <p className="text-sm text-slate-500">@{other.username}</p>
         {listing && (
           <Link href={`/listing/${listing.slug}`} className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-slate-50 p-3 hover:bg-slate-100">
-            {listing.images[0] && /* eslint-disable-next-line @next/next/no-img-element */ <img src={listing.images[0].url} alt="" className="h-14 w-14 rounded-md object-cover" />}
+            {listing.images[0] && <Image src={listing.images[0].url} alt="" width={56} height={56} sizes="56px" className="h-14 w-14 rounded-md object-cover" />}
             <span className="min-w-0"><span className="block truncate text-sm font-medium">{listing.title}</span><span className="block text-sm text-slate-600">{formatZAR(listing.priceCents)}{listing.status !== "ACTIVE" ? ` · ${listing.status.toLowerCase()}` : ""}</span></span>
             <span className="ml-auto shrink-0 text-xs font-medium text-brand">View listing</span>
           </Link>

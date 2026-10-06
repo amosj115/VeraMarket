@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { detectImageType } from "@/lib/security/image";

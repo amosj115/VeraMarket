@@ -7,6 +7,7 @@ import { loginSchema } from "@/lib/validation/auth";
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost:
     process.env.AUTH_TRUST_HOST === "true" ||
+    process.env.VERCEL === "1" ||
     process.env.NODE_ENV !== "production",
   session: { strategy: "jwt" },
   pages: {

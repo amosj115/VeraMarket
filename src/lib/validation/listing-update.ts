@@ -6,5 +6,5 @@ export const listingUpdateSchema = z.object({
   priceRand: z.coerce.number().min(0).max(100_000_000).optional(),
   condition: z.enum(["NEW", "LIKE_NEW", "GOOD", "FAIR", "FOR_PARTS"]).optional(),
   location: z.string().trim().min(2).max(120).optional(),
-  status: z.enum(["ACTIVE", "SOLD", "REMOVED"]).optional(),
+  status: z.enum(["SOLD", "REMOVED"]).optional(),
 });

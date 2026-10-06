@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/security/password";
 import { registerSchema } from "@/lib/validation/auth";
@@ -38,29 +39,63 @@ export async function POST(request: NextRequest) {
 
   const { displayName, username, email, password } = parsed.data;
 
-  const existing = await prisma.user.findFirst({
-    where: { OR: [{ email }, { username }] },
-    select: { email: true, username: true },
-  });
-  if (existing) {
-    const field = existing.email === email ? "email" : "username";
+  try {
+    const existing = await prisma.user.findFirst({
+      where: { OR: [{ email }, { username }] },
+      select: { email: true, username: true },
+    });
+    if (existing) {
+      const field = existing.email === email ? "email" : "username";
+      return NextResponse.json(
+        { error: `That ${field} is already in use.` },
+        { status: 409 }
+      );
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    const user = await prisma.user.create({
+      data: {
+        displayName,
+        username,
+        email,
+        passwordHash,
+      },
+      select: { id: true, email: true, username: true },
+    });
+
+    return NextResponse.json({ user }, { status: 201 });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = error.meta?.target;
+      const targetName = Array.isArray(target)
+        ? target.join(" ")
+        : typeof target === "string"
+          ? target
+          : "";
+      const field = /email/i.test(targetName)
+        ? "email"
+        : /username/i.test(targetName)
+          ? "username"
+          : "details";
+      return NextResponse.json(
+        {
+          error:
+            field === "details"
+              ? "Those registration details are already in use."
+              : `That ${field} is already in use.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    console.error("[register] account creation failed", error);
     return NextResponse.json(
-      { error: `That ${field} is already in use.` },
-      { status: 409 }
+      { error: "Registration is temporarily unavailable. Please try again." },
+      { status: 500 }
     );
   }
-
-  const passwordHash = await hashPassword(password);
-
-  const user = await prisma.user.create({
-    data: {
-      displayName,
-      username,
-      email,
-      passwordHash,
-    },
-    select: { id: true, email: true, username: true },
-  });
-
-  return NextResponse.json({ user }, { status: 201 });
 }

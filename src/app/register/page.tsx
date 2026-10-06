@@ -21,6 +21,7 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
 
+    let accountCreated = false;
     try {
       const res = await fetch("/api/register", {
         method: "POST",
@@ -34,6 +35,7 @@ export default function RegisterPage() {
         setLoading(false);
         return;
       }
+      accountCreated = true;
 
       const result = await signIn("credentials", {
         email: form.email,
@@ -42,14 +44,21 @@ export default function RegisterPage() {
       });
 
       if (result?.error) {
-        router.push("/login");
+        setError(
+          "Your account was created, but automatic sign-in failed. Please use the Log in link below."
+        );
+        setLoading(false);
         return;
       }
 
       router.push("/onboarding/profile");
       router.refresh();
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError(
+        accountCreated
+          ? "Your account was created, but automatic sign-in failed. Please use the Log in link below."
+          : "Something went wrong. Please try again."
+      );
       setLoading(false);
     }
   }

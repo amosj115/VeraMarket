@@ -1,7 +1,29 @@
 import type { NextConfig } from "next";
 
+const storageImageUrl = process.env.S3_PUBLIC_URL
+  ? new URL(process.env.S3_PUBLIC_URL)
+  : null;
+const storageImagePattern = storageImageUrl
+  ? {
+      protocol: storageImageUrl.protocol === "http:" ? ("http" as const) : ("https" as const),
+      hostname: storageImageUrl.hostname,
+      pathname: `${storageImageUrl.pathname.replace(/\/+$/, "")}/**`,
+    }
+  : null;
+
+if (
+  storageImageUrl &&
+  storageImageUrl.protocol !== "http:" &&
+  storageImageUrl.protocol !== "https:"
+) {
+  throw new Error("S3_PUBLIC_URL must use HTTP or HTTPS.");
+}
+
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  images: {
+    remotePatterns: storageImagePattern ? [storageImagePattern] : [],
+  },
   // Dev server blocks /_next assets for non-localhost origins; production builds are unaffected.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "*.local", ...(process.env.ALLOWED_DEV_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [])],
   // Friendly public URLs backed by the existing pages. Old URLs keep working.
