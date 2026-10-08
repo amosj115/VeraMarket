@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { integrations } from "@/lib/config";
 import { MAX_ATTEMPTS_PER_DAY } from "@/lib/face-verification";
 import { profileVerificationEnforced } from "@/lib/profile-gate";
+import { getDiditProviderStatus } from "@/lib/didit-biometric";
 
 export async function GET() {
   const session = await auth();
@@ -15,7 +16,14 @@ export async function GET() {
     prisma.identityVerification.findFirst({ where: { userId: session.user.id }, orderBy: { createdAt: "desc" }, select: { state: true, failureCode: true } }),
     prisma.identityVerification.count({ where: { userId: session.user.id, createdAt: { gte: since } } }),
   ]);
-  const provider = integrations.persona.configured ? "persona" : integrations.faceVerification.configured ? "http" : null;
+  const diditStatus = getDiditProviderStatus();
+  const provider = diditStatus.configured
+    ? "didit-biometric"
+    : integrations.persona.configured
+      ? "persona"
+      : integrations.faceVerification.configured
+        ? "http"
+        : null;
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(
     {
@@ -27,6 +35,7 @@ export async function GET() {
       location: user.location ?? "",
       providerConfigured: provider !== null,
       provider,
+      diditConfigured: diditStatus.configured,
       identityState: latestIdentity?.state ?? null,
       identityFailure: latestIdentity?.failureCode ?? null,
       enforced: profileVerificationEnforced(),

@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FACE_FAILURE_MESSAGES, VERIFICATION_PROMPTS, type FaceFailureCode } from "@/lib/face-verification-shared";
+import { DIDIT_FAILURE_MESSAGES, type DiditFailureCode } from "@/lib/didit-biometric";
 
 type Step = "profile" | "photo" | "camera" | "result";
-type Status = { status: string; photoUrl: string | null; consented: boolean; displayName: string; bio: string; location: string; providerConfigured: boolean; provider: "persona" | "http" | null; identityState: string | null; identityFailure: string | null; attemptsRemaining: number };
-type Outcome = { kind: "passed" } | { kind: "failed"; code: FaceFailureCode | null; message?: string; attemptsRemaining?: number } | { kind: "unavailable"; message: string } | { kind: "pending" };
+type Status = { status: string; photoUrl: string | null; consented: boolean; displayName: string; bio: string; location: string; providerConfigured: boolean; provider: "persona" | "http" | "didit-biometric" | null; diditConfigured: boolean; identityState: string | null; identityFailure: string | null; attemptsRemaining: number };
+type Outcome =
+  | { kind: "passed" }
+  | { kind: "failed"; code: FaceFailureCode | DiditFailureCode | null; message?: string; attemptsRemaining?: number }
+  | { kind: "unavailable"; message: string }
+  | { kind: "pending" };
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "profile", label: "Profile" },
@@ -194,8 +199,39 @@ export function ProfileOnboarding() {
     }
   }
 
+  async function runDiditBiometricVerification() {
+    setBusy(true);
+    setError(null);
+    stopCamera();
+
+    const blob = await captureFrame();
+    if (!blob) {
+      setBusy(false);
+      return setError("We couldn't capture from your camera. Please try again.");
+    }
+
+    const body = new FormData();
+    body.append("user_image", blob, "selfie.jpg");
+
+    const response = await fetch("/api/verify/didit-biometric", { method: "POST", body });
+    const data = await response.json().catch(() => ({}));
+    setBusy(false);
+
+    if (response.ok && data.passed) {
+      setOutcome({ kind: "passed" });
+    } else if (response.status === 503) {
+      setOutcome({ kind: "unavailable", message: data.error });
+    } else if (response.status === 429 || response.status === 400) {
+      setOutcome({ kind: "failed", code: null, message: data.error });
+    } else {
+      setOutcome({ kind: "failed", code: data.failureCode ?? null, message: data.message, attemptsRemaining: data.attemptsRemaining });
+    }
+    setStep("result");
+  }
+
   async function runVerification() {
     if (info?.provider === "persona") return runIdentityVerification();
+    if (info?.provider === "didit-biometric") return runDiditBiometricVerification();
     setBusy(true);
     setError(null);
     const body = new FormData();
@@ -292,7 +328,14 @@ export function ProfileOnboarding() {
       {step === "camera" && (
         <div className="space-y-4">
           <h1 className="text-2xl font-semibold tracking-tight">Verify that you&apos;re really you</h1>
-          <p className="text-sm text-slate-500">{info.provider === "persona" ? "We use Persona, a secure identity-verification service, to check your ID and a live selfie. First, turn on your camera to allow access in your browser." : "We&apos;ll use your front camera to compare you with your profile photo."} This helps VeraMarket create a marketplace where people know there is a real person behind an account.</p>
+          <p className="text-sm text-slate-500">
+            {info.provider === "persona"
+              ? "We use Persona, a secure identity-verification service, to check your ID and a live selfie. First, turn on your camera to allow access in your browser."
+              : info.provider === "didit-biometric"
+                ? "We&apos;ll take a single selfie to check liveness and match it with your profile photo. No ID document needed."
+                : "We&apos;ll use your front camera to compare you with your profile photo."}
+            This helps VeraMarket create a marketplace where people know there is a real person behind an account.
+          </p>
           {!info.providerConfigured && (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Verification isn&apos;t configured on this server yet, so verification can&apos;t be completed right now.</p>
           )}
@@ -304,7 +347,7 @@ export function ProfileOnboarding() {
           </div>
           <ul className="list-inside list-disc text-xs text-slate-500">
             <li>Make sure only you are in the frame and your face is well lit.</li>
-            <li>Follow the prompts on screen. VeraMarket doesn&apos;t store your camera images.</li>
+            <li>{info.provider === "didit-biometric" ? "Look straight at the camera for a single capture." : "Follow the prompts on screen."} VeraMarket doesn&apos;t store your camera images.</li>
           </ul>
           {error && <p className="text-sm text-red-700">{error}</p>}
           <div className="flex gap-2">
@@ -324,7 +367,14 @@ export function ProfileOnboarding() {
             <>
               <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-3xl text-emerald-600">✓</span>
               <h1 className="text-2xl font-semibold tracking-tight">Identity Verified</h1>
-              <p className="text-sm text-slate-500">You&apos;re now a Verified Person. This means you appear to match your real profile photo. {info.provider === "persona" ? "Your identity was confirmed by our verification provider." : "It isn&apos;t a government ID check."}</p>
+              <p className="text-sm text-slate-500">
+                You&apos;re now a Verified Person. This means you appear to match your real profile photo.
+                {info.provider === "persona"
+                  ? " Your identity was confirmed by our verification provider."
+                  : info.provider === "didit-biometric"
+                    ? " Liveness and face match were confirmed."
+                    : " It isn&apos;t a government ID check."}
+              </p>
               <div className="flex flex-col gap-2 pt-2">
                 <Link href="/" className="rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark">Go to the marketplace</Link>
                 <Link href="/sell" className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-brand">Sell something</Link>
@@ -348,7 +398,14 @@ export function ProfileOnboarding() {
           {outcome.kind === "failed" && (
             <div className="space-y-4 text-left">
               <h1 className="text-center text-2xl font-semibold tracking-tight">We couldn&apos;t verify your photo</h1>
-              <p className="text-center text-sm text-slate-600">{outcome.message ?? (outcome.code ? FACE_FAILURE_MESSAGES[outcome.code] : "We couldn't complete verification.")}</p>
+              <p className="text-center text-sm text-slate-600">
+                {outcome.message ??
+                  (outcome.code
+                    ? (outcome.code in DIDIT_FAILURE_MESSAGES
+                        ? DIDIT_FAILURE_MESSAGES[outcome.code as DiditFailureCode]
+                        : FACE_FAILURE_MESSAGES[outcome.code as FaceFailureCode])
+                    : "We couldn't complete verification.")}
+              </p>
               <div className="rounded-lg border border-border bg-white p-4 text-sm text-slate-600">
                 <p className="font-semibold text-foreground">Try again</p>
                 <ul className="mt-2 list-inside list-disc space-y-1">

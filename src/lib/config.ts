@@ -7,16 +7,13 @@
  */
 
 export const integrations = {
-  twilio: {
+  smsMessenger: {
     configured: Boolean(
-      process.env.TWILIO_ACCOUNT_SID &&
-        process.env.TWILIO_AUTH_TOKEN &&
-        process.env.TWILIO_VERIFY_SERVICE_SID
+      process.env.SMS_MESSENGER_EMAIL && process.env.SMS_MESSENGER_API_TOKEN
     ),
     missing: [
-      !process.env.TWILIO_ACCOUNT_SID && "TWILIO_ACCOUNT_SID",
-      !process.env.TWILIO_AUTH_TOKEN && "TWILIO_AUTH_TOKEN",
-      !process.env.TWILIO_VERIFY_SERVICE_SID && "TWILIO_VERIFY_SERVICE_SID",
+      !process.env.SMS_MESSENGER_EMAIL && "SMS_MESSENGER_EMAIL",
+      !process.env.SMS_MESSENGER_API_TOKEN && "SMS_MESSENGER_API_TOKEN",
     ].filter(Boolean) as string[],
   },
   paystack: {
@@ -53,6 +50,10 @@ export const integrations = {
       !process.env.FACE_VERIFICATION_API_URL && "FACE_VERIFICATION_API_URL",
       !process.env.FACE_VERIFICATION_API_KEY && "FACE_VERIFICATION_API_KEY",
     ].filter(Boolean) as string[],
+  },
+  didit: {
+    configured: Boolean(process.env.DIDIT_API_KEY),
+    missing: [!process.env.DIDIT_API_KEY && "DIDIT_API_KEY"].filter(Boolean) as string[],
   },
   objectStorage: {
     configured: process.env.STORAGE_DRIVER === "s3" && Boolean(process.env.S3_BUCKET),
