@@ -31,7 +31,7 @@ function configureCloudinary() {
     cloud_name: cloudName,
     api_key: apiKey,
     api_secret: apiSecret,
-    secure: true,
+    secure: true, 
   });
 
   return true;

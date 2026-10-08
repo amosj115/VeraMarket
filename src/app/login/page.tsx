@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -11,20 +11,36 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Keep the submit button inert until hydration so an early click cannot do a native form submit (page reload).
+  const ready = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setLoading(true);
+
+    const requestedCallback = new URLSearchParams(window.location.search).get(
+      "callbackUrl"
+    );
+    const destination =
+      requestedCallback?.startsWith("/") && !requestedCallback.startsWith("//")
+        ? requestedCallback
+        : "/";
 
     try {
       const result = await signIn("credentials", {
         email,
         password,
+        callbackUrl: destination,
         redirect: false,
       });
 
-      if (result?.error) {
+      if (!result?.ok || result.error) {
         setError(
           result.error === "CredentialsSignin"
             ? "Incorrect email or password."
@@ -39,7 +55,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    router.replace(destination);
     router.refresh();
   }
 
@@ -80,7 +96,7 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !ready}
           className="w-full rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark disabled:opacity-60"
         >
           {loading ? "Logging in…" : "Log in"}

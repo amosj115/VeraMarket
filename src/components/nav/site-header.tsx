@@ -42,7 +42,13 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          {status === "authenticated" ? (
+          {status === "loading" ? (
+            <span
+              role="status"
+              aria-label="Loading account"
+              className="h-9 w-20 animate-pulse rounded-md bg-slate-100"
+            />
+          ) : status === "authenticated" ? (
             <>
               <Link
                 href="/messages"
@@ -90,10 +96,18 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
-          <NotificationBell />
-          <Link href={status === "authenticated" ? "/profile" : "/login"} aria-label="Profile" className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold uppercase text-white">
-            {session?.user?.username?.[0] ?? "?"}
-          </Link>
+          {status !== "loading" && <NotificationBell />}
+          {status === "loading" ? (
+            <span
+              role="status"
+              aria-label="Loading profile"
+              className="h-8 w-8 animate-pulse rounded-full bg-slate-100"
+            />
+          ) : (
+            <Link href={status === "authenticated" ? "/profile" : "/login"} aria-label="Profile" className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold uppercase text-white">
+              {status === "authenticated" ? session.user.username[0] : "?"}
+            </Link>
+          )}
         <button
           className="flex h-9 w-9 items-center justify-center rounded-md border border-border"
           onClick={() => setMenuOpen((v) => !v)}
