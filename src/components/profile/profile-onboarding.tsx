@@ -116,7 +116,15 @@ export function ProfileOnboarding() {
       return setError("This browser or device doesn't support camera access. Try a current version of Chrome, Safari, Edge or Firefox on a device with a camera.");
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 720 } }, audio: false });
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: "user" },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+        },
+        audio: false,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -125,23 +133,65 @@ export function ProfileOnboarding() {
       setCameraOn(true);
     } catch (err) {
       const name = err instanceof DOMException ? err.name : "";
-      setError(name === "NotAllowedError" || name === "SecurityError" ? "Camera permission was denied. Allow camera access for this site in your browser settings, then try again." : name === "NotFoundError" ? "No camera was found on this device." : name === "NotReadableError" ? "Your camera is in use by another app. Close it and try again." : "We couldn't start your camera.");
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setError("Camera permission was denied. Please allow camera access for this site in your browser settings, then try again. On iOS: Settings > Safari > Camera > Allow.");
+      } else if (name === "NotFoundError") {
+        setError("No camera was found on this device.");
+      } else if (name === "NotReadableError") {
+        setError("Your camera is in use by another app. Close other apps using the camera and try again.");
+      } else if (name === "OverconstrainedError") {
+        // Retry with simpler constraints
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+          streamRef.current = fallbackStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+            await videoRef.current.play();
+          }
+          setCameraOn(true);
+          return;
+        } catch {
+          setError("Your camera doesn't support the required resolution. Please try a different device.");
+        }
+      } else if (isSafari && name === "AbortError") {
+        setError("Camera access was blocked. On iOS, go to Settings > Safari > Camera and set to 'Allow'.");
+      } else {
+        setError("We couldn't start your camera. Please try again or use a different browser.");
+      }
     }
   }
 
   function captureFrame(): Promise<Blob | null> {
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return Promise.resolve(null);
-    const size = Math.min(video.videoWidth, video.videoHeight, 720);
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext("2d");
-    if (!context) return Promise.resolve(null);
-    const sx = (video.videoWidth - size) / 2;
-    const sy = (video.videoHeight - size) / 2;
-    context.drawImage(video, sx, sy, size, size, 0, 0, size, size);
-    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!video) return Promise.resolve(null);
+
+    return new Promise((resolve) => {
+      if (video.readyState < 2 || !video.videoWidth) {
+        const onCanPlay = () => {
+          video.removeEventListener("canplay", onCanPlay);
+          doCapture().then(resolve);
+        };
+        video.addEventListener("canplay", onCanPlay, { once: true });
+        return;
+      }
+      doCapture().then(resolve);
+    });
+
+    function doCapture(): Promise<Blob | null> {
+      const v = videoRef.current;
+      if (!v || !v.videoWidth) return Promise.resolve(null);
+      const size = Math.min(v.videoWidth, v.videoHeight, 720);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d");
+      if (!context) return Promise.resolve(null);
+      const sx = (v.videoWidth - size) / 2;
+      const sy = (v.videoHeight - size) / 2;
+      context.drawImage(v, sx, sy, size, size, 0, 0, size, size);
+      return new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.9));
+    }
   }
 
   async function refreshStatus(): Promise<Status | null> {
@@ -202,13 +252,14 @@ export function ProfileOnboarding() {
   async function runDiditBiometricVerification() {
     setBusy(true);
     setError(null);
-    stopCamera();
 
     const blob = await captureFrame();
     if (!blob) {
       setBusy(false);
       return setError("We couldn't capture from your camera. Please try again.");
     }
+
+    stopCamera();
 
     const body = new FormData();
     body.append("user_image", blob, "selfie.jpg");
