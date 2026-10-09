@@ -11,6 +11,15 @@ const storageImagePattern = storageImageUrl
     }
   : null;
 
+const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const cloudinaryImagePattern = cloudinaryCloudName
+  ? {
+      protocol: "https" as const,
+      hostname: "res.cloudinary.com",
+      pathname: `/${cloudinaryCloudName}/**`,
+    }
+  : null;
+
 if (
   storageImageUrl &&
   storageImageUrl.protocol !== "http:" &&
@@ -22,7 +31,7 @@ if (
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   images: {
-    remotePatterns: storageImagePattern ? [storageImagePattern] : [],
+    remotePatterns: [storageImagePattern, cloudinaryImagePattern].filter(Boolean) as NonNullable<typeof storageImagePattern>[],
   },
   // Dev server blocks /_next assets for non-localhost origins; production builds are unaffected.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "*.local", ...(process.env.ALLOWED_DEV_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [])],
