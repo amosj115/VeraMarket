@@ -115,7 +115,7 @@ export default async function ListingPage({ params }: Props) {
             {trust && <p className="mt-2 text-xs font-medium text-brand">Vera Trust {trust.score}/100 · {trust.tier}</p>}
             <FollowButton kind="seller" id={listing.seller.id} label="Follow seller" />
           </div>
-          <ListingActions listingId={listing.id} title={listing.title} />
+          <ListingActions listingId={listing.id} title={listing.title} priceCents={listing.priceCents} />
         </div>
       </div>
       {relatedGrid}
