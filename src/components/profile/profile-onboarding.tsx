@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { PhoneVerification } from "@/components/verification/phone-verification";
 import { FACE_FAILURE_MESSAGES, VERIFICATION_PROMPTS, type FaceFailureCode } from "@/lib/face-verification-shared";
 import { DIDIT_FAILURE_MESSAGES, type DiditFailureCode } from "@/lib/didit-biometric";
 
-type Step = "profile" | "photo" | "camera" | "result";
-type Status = { status: string; photoUrl: string | null; consented: boolean; displayName: string; bio: string; location: string; providerConfigured: boolean; provider: "persona" | "http" | "didit-biometric" | null; diditConfigured: boolean; identityState: string | null; identityFailure: string | null; attemptsRemaining: number };
+type Step = "profile" | "photo" | "camera" | "phone" | "result";
+type Status = { status: string; photoUrl: string | null; consented: boolean; displayName: string; bio: string; location: string; providerConfigured: boolean; provider: "persona" | "http" | "didit-biometric" | null; diditConfigured: boolean; identityState: string | null; identityFailure: string | null; attemptsRemaining: number; phoneVerification: string; phoneVerifiedAt: string | null; phone: string | null; phoneConfigured: boolean };
 type Outcome =
   | { kind: "passed" }
   | { kind: "failed"; code: FaceFailureCode | DiditFailureCode | null; message?: string; attemptsRemaining?: number }
@@ -17,6 +18,7 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "profile", label: "Profile" },
   { id: "photo", label: "Photo" },
   { id: "camera", label: "Verify" },
+  { id: "phone", label: "Phone" },
   { id: "result", label: "Result" },
 ];
 
@@ -206,7 +208,19 @@ export function ProfileOnboarding() {
       const latest = await refreshStatus();
       if (latest) {
         setInfo(latest);
-        if (latest.status === "VERIFIED") { setOutcome({ kind: "passed" }); break; }
+        if (latest.status === "VERIFIED") {
+          if (info?.phoneVerification === "VERIFIED") {
+            setOutcome({ kind: "passed" });
+            setStep("result");
+          } else if (info?.phoneConfigured) {
+            setOutcome({ kind: "passed" });
+            setStep("phone");
+          } else {
+            setOutcome({ kind: "passed" });
+            setStep("result");
+          }
+          break;
+        }
         if (latest.status === "FAILED") { setOutcome({ kind: "failed", code: null, message: IDENTITY_FAILURE_MESSAGES[latest.identityFailure ?? ""] ?? IDENTITY_FAILURE_MESSAGES.FAILED, attemptsRemaining: latest.attemptsRemaining }); break; }
       }
       if (i === 19) setOutcome({ kind: "pending" });
@@ -269,7 +283,17 @@ export function ProfileOnboarding() {
     setBusy(false);
 
     if (response.ok && data.passed) {
-      setOutcome({ kind: "passed" });
+      // Face verification passed, check if phone verification is needed
+      if (info?.phoneVerification === "VERIFIED") {
+        setOutcome({ kind: "passed" });
+        setStep("result");
+      } else if (info?.phoneConfigured) {
+        setOutcome({ kind: "passed" });
+        setStep("phone");
+      } else {
+        setOutcome({ kind: "passed" });
+        setStep("result");
+      }
     } else if (response.status === 503) {
       setOutcome({ kind: "unavailable", message: data.error });
     } else if (response.status === 429 || response.status === 400) {
@@ -303,8 +327,19 @@ export function ProfileOnboarding() {
     const data = await response.json().catch(() => ({}));
     setPrompt(null);
     setBusy(false);
-    if (response.ok && data.passed) setOutcome({ kind: "passed" });
-    else if (response.status === 503) setOutcome({ kind: "unavailable", message: data.error });
+    if (response.ok && data.passed) {
+      // Face verification passed, check if phone verification is needed
+      if (info?.phoneVerification === "VERIFIED") {
+        setOutcome({ kind: "passed" });
+        setStep("result");
+      } else if (info?.phoneConfigured) {
+        setOutcome({ kind: "passed" });
+        setStep("phone");
+      } else {
+        setOutcome({ kind: "passed" });
+        setStep("result");
+      }
+    } else if (response.status === 503) setOutcome({ kind: "unavailable", message: data.error });
     else if (response.status === 429 || response.status === 400) setOutcome({ kind: "failed", code: null, message: data.error });
     else setOutcome({ kind: "failed", code: data.failureCode ?? null, attemptsRemaining: data.attemptsRemaining });
     setStep("result");
@@ -407,6 +442,26 @@ export function ProfileOnboarding() {
               <button type="button" disabled={busy} onClick={runVerification} className="flex-1 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60">{busy ? "Verifying..." : "Start verification"}</button>
             ) : (
               <button type="button" onClick={startCamera} className="flex-1 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark">Turn on camera</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {step === "phone" && (
+        <div className="space-y-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Verify your phone number</h1>
+          <p className="text-sm text-slate-500">We&apos;ll send a one-time code via SMS to confirm your phone number. This helps keep your account secure.</p>
+          {!info.phoneConfigured && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Phone verification isn&apos;t configured on this server yet, so this step can&apos;t be completed right now.</p>
+          )}
+          <PhoneVerification verified={info.phoneVerification === "VERIFIED"} />
+          {error && <p className="text-sm text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button type="button" disabled={busy} onClick={() => { setStep("camera"); }} className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50">Back</button>
+            {info.phoneVerification === "VERIFIED" ? (
+              <button type="button" disabled={busy} onClick={() => { setOutcome({ kind: "passed" }); setStep("result"); }} className="flex-1 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60">{busy ? "Continuing..." : "Continue"}</button>
+            ) : (
+              <></>
             )}
           </div>
         </div>

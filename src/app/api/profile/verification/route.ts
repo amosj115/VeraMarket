@@ -11,7 +11,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [user, attempts, latestIdentity, identityAttempts] = await Promise.all([
-    prisma.user.findUnique({ where: { id: session.user.id }, select: { profileVerification: true, avatarUrl: true, profilePhotoConsentAt: true, displayName: true, bio: true, location: true } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { profileVerification: true, avatarUrl: true, profilePhotoConsentAt: true, displayName: true, bio: true, location: true, phoneVerification: true, phoneVerifiedAt: true, phone: true } }),
     prisma.faceVerificationAttempt.count({ where: { userId: session.user.id, createdAt: { gte: since }, NOT: { failureCode: "PROVIDER_ERROR" } } }),
     prisma.identityVerification.findFirst({ where: { userId: session.user.id }, orderBy: { createdAt: "desc" }, select: { state: true, failureCode: true } }),
     prisma.identityVerification.count({ where: { userId: session.user.id, createdAt: { gte: since } } }),
@@ -40,6 +40,10 @@ export async function GET() {
       identityFailure: latestIdentity?.failureCode ?? null,
       enforced: profileVerificationEnforced(),
       attemptsRemaining: Math.max(0, MAX_ATTEMPTS_PER_DAY - (provider === "persona" ? identityAttempts : attempts)),
+      phoneVerification: user.phoneVerification,
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      phone: user.phone,
+      phoneConfigured: integrations.smsMessenger.configured,
     },
     { headers: { "Cache-Control": "no-store" } }
   );

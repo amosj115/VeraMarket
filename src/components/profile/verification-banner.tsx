@@ -15,7 +15,13 @@ export function VerificationBanner() {
     let cancelled = false;
     fetch("/api/profile/verification", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => { if (!cancelled && data) setNeedsVerification(data.enforced && data.status !== "VERIFIED"); })
+      .then((data) => {
+        if (!cancelled && data) {
+          const identityNeeded = data.enforced && data.status !== "VERIFIED";
+          const phoneNeeded = data.enforced && data.phoneConfigured && data.phoneVerification !== "VERIFIED";
+          setNeedsVerification(identityNeeded || phoneNeeded);
+        }
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [status, pathname]);
@@ -24,7 +30,7 @@ export function VerificationBanner() {
   return (
     <div className="border-b border-amber-200 bg-amber-50">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm sm:px-6 lg:px-8">
-        <p className="text-amber-900"><span className="font-semibold">Profile verification required.</span> Verify that you&apos;re really you to buy, sell, message and open a Virtual Store.</p>
+        <p className="text-amber-900"><span className="font-semibold">Verification required.</span> Verify your identity and phone number to buy, sell, message and open a Virtual Store.</p>
         <Link href="/onboarding/profile" className="font-semibold text-amber-900 underline">Verify now</Link>
       </div>
     </div>
