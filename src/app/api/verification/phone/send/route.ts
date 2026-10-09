@@ -41,10 +41,19 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
-  const sent = await sendSms(phone, `Your Vera Market verification code is ${code}. It expires in 5 minutes. Do not share it.`);
-  if (!sent) {
+  const result = await sendSms(phone, `Your Vera Market verification code is ${code}. It expires in 5 minutes. Do not share it.`);
+  if (!result.ok) {
     await prisma.otpCode.delete({ where: { id: otp.id } }).catch(() => null);
-    return NextResponse.json({ error: "The SMS provider could not send a code." }, { status: 502 });
+    const status = result.reason === "auth" ? 503 : result.reason === "credits" ? 503 : result.reason === "invalid_number" ? 400 : 502;
+    const errorMap: Record<string, string> = {
+      auth: "SMS authentication failed. Check SMS_MESSENGER_EMAIL and SMS_MESSENGER_API_TOKEN.",
+      credits: "Insufficient SMS credits. Add credits to your SMS Messenger account.",
+      invalid_number: "Invalid phone number format for SMS delivery.",
+      provider_error: "The SMS provider reported an error. Check provider status.",
+      network: "Could not reach the SMS provider. Try again later.",
+      unknown: "The SMS provider returned an unexpected response.",
+    };
+    return NextResponse.json({ error: errorMap[result.reason] ?? "The SMS provider could not send a code.", code: result.reason, detail: result.detail }, { status });
   }
-  return NextResponse.json({ sent: true });
+  return NextResponse.json({ sent: true, messageId: result.messageId });
 }
