@@ -128,6 +128,7 @@ function publicIdFromUrl(url: string): string | null {
 
     // Remove transformations such as:
     // /upload/f_auto,q_auto/
+    // and version numbers like /v1234567890/
     const parts = publicPath.split("/");
 
     while (
@@ -140,7 +141,8 @@ function publicIdFromUrl(url: string): string | null {
         parts[0].includes("q_") ||
         parts[0].includes("f_") ||
         parts[0].includes("dpr_") ||
-        parts[0].includes("ar_")
+        parts[0].includes("ar_") ||
+        /^v\d+$/.test(parts[0])
       )
     ) {
       parts.shift();
