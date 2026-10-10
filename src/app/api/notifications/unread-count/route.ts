@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { getUnreadTotals } from "@/lib/notification-groups";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ count: 0 });
-  const count = await prisma.notification.count({ where: { userId: session.user.id, readAt: null } });
-  return NextResponse.json({ count }, { headers: { "Cache-Control": "no-store" } });
+  if (!session?.user) return NextResponse.json({ count: 0, chat: 0, system: 0 });
+  const totals = await getUnreadTotals(session.user.id);
+  return NextResponse.json(
+    { count: totals.totalUnread, chat: totals.chatUnread, system: totals.systemUnread },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

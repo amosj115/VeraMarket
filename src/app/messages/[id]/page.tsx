@@ -5,10 +5,12 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
 import { expireStaleOffers } from "@/lib/offers";
+import { markConversationNotificationsRead } from "@/lib/notifications";
 import { MessageComposer } from "@/components/messages/message-composer";
 import { ChatActions } from "@/components/messages/chat-actions";
 import { OfferCard } from "@/components/messages/offer-card";
 import { MakeOfferForm } from "@/components/messages/make-offer-form";
+import { NotificationsAnnouncer } from "@/components/notifications/notifications-announcer";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     prisma.offer.findMany({ where: { conversationId: id } }),
   ]);
   await prisma.message.updateMany({ where: { conversationId: id, senderId: { not: me }, readAt: null }, data: { readAt: new Date() } });
+  await markConversationNotificationsRead(me, id);
   const offerById = new Map(offers.map((offer) => [offer.id, offer]));
   const listing = conversation.listing;
   const iAmBuyer = listing ? listing.sellerId !== me : false;
@@ -42,6 +45,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+      <NotificationsAnnouncer />
       <Link href="/messages" className="text-sm font-medium text-brand">&larr; Back to messages</Link>
       <div className="mt-4 border-b border-border pb-4">
         <h1 className="text-2xl font-semibold">{other.displayName}</h1>

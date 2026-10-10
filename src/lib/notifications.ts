@@ -5,6 +5,18 @@ import { formatZAR } from "@/lib/utils";
 const SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const SEARCH_SCAN_LIMIT = 5000;
 
+// Chat notifications are represented by conversation groups derived from Message rows,
+// so these rows are never listed or counted separately (avoids double counting).
+export const MESSAGE_NOTIFICATION_TYPES: NotificationType[] = ["NEW_MESSAGE", "MESSAGE"];
+
+// Opening a conversation marks its messages read; the matching notification rows follow.
+export async function markConversationNotificationsRead(userId: string, conversationId: string) {
+  return prisma.notification.updateMany({
+    where: { userId, type: { in: MESSAGE_NOTIFICATION_TYPES }, link: `/messages/${conversationId}`, readAt: null },
+    data: { readAt: new Date() },
+  });
+}
+
 export type NotificationInput = {
   userId: string;
   type: NotificationType;

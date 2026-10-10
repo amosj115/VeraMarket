@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { markConversationNotificationsRead } from "@/lib/notifications";
 import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { z } from "zod";
 import { blockedBetween, paymentRisk, SAFETY_REMINDER } from "@/lib/chat-safety";
@@ -40,6 +41,7 @@ export async function GET(
     where: { conversationId: id, senderId: { not: session.user.id }, readAt: null },
     data: { readAt: new Date() },
   });
+  await markConversationNotificationsRead(session.user.id, id);
 
   return NextResponse.json({ messages });
 }

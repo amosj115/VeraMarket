@@ -4,17 +4,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { NOTIFICATIONS_CHANGED, NotificationItem, announceNotificationsChanged, type NotificationDto } from "./notification-item";
+import type { NotificationSummary } from "@/lib/notification-groups";
+import { ChatGroupRow, SystemGroupRow } from "./notification-groups";
+import { NOTIFICATIONS_CHANGED, announceNotificationsChanged } from "./notification-item";
 
 const BELL_PATH = "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0";
+const PREVIEW_CHATS = 4;
 
 export function NotificationBell({ className = "" }: { className?: string }) {
   const { status } = useSession();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<NotificationDto[]>([]);
+  const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const authenticated = status === "authenticated";
 
@@ -28,11 +32,11 @@ export function NotificationBell({ className = "" }: { className?: string }) {
   const refreshList = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/notifications?limit=8", { cache: "no-store" });
+      const response = await fetch("/api/notifications/summary", { cache: "no-store" });
       if (response.ok) {
-        const data = await response.json();
-        setItems(data.items);
-        setUnread(data.unreadCount);
+        const data = (await response.json()) as NotificationSummary;
+        setSummary(data);
+        setUnread(data.totalUnread);
       }
     } finally {
       setLoading(false);
@@ -71,22 +75,15 @@ export function NotificationBell({ className = "" }: { className?: string }) {
     if (next) refreshList();
   }
 
-  async function openItem(notification: NotificationDto) {
-    setOpen(false);
-    if (!notification.isRead) {
-      setItems((current) => current.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item)));
-      setUnread((count) => Math.max(0, count - 1));
-      await fetch(`/api/notifications/${notification.id}`, { method: "PATCH" }).catch(() => {});
-      announceNotificationsChanged();
-    }
-    router.push(notification.link ?? "/notifications");
-  }
-
   async function markAllRead() {
-    setItems((current) => current.map((item) => ({ ...item, isRead: true })));
-    setUnread(0);
-    await fetch("/api/notifications/read-all", { method: "POST" }).catch(() => {});
-    announceNotificationsChanged();
+    setMarkingAll(true);
+    try {
+      await fetch("/api/notifications/read-all", { method: "POST" }).catch(() => {});
+      await refreshList();
+      announceNotificationsChanged();
+    } finally {
+      setMarkingAll(false);
+    }
   }
 
   const icon = (
@@ -97,6 +94,11 @@ export function NotificationBell({ className = "" }: { className?: string }) {
   if (!authenticated) {
     return <Link href="/login?callbackUrl=/notifications" aria-label="Notifications" className={buttonClass}>{icon}</Link>;
   }
+
+  const chatGroups = summary?.chatGroups.slice(0, PREVIEW_CHATS) ?? [];
+  const system = summary?.system ?? null;
+  const hasRows = Boolean((summary && chatGroups.length > 0) || system);
+  const closeAndNavigate = () => setOpen(false);
 
   return (
     <div ref={rootRef} className="relative">
@@ -113,20 +115,37 @@ export function NotificationBell({ className = "" }: { className?: string }) {
         <div className="absolute right-0 top-full z-50 mt-2 hidden w-[24rem] overflow-hidden rounded-xl border border-border bg-white shadow-xl md:block">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>
-            <button type="button" onClick={markAllRead} disabled={unread === 0} className="text-xs font-semibold text-brand disabled:text-slate-300">Mark all as read</button>
+            <button type="button" onClick={markAllRead} disabled={markingAll || unread === 0} className="text-xs font-semibold text-brand disabled:text-slate-300">Mark all as read</button>
           </div>
-          <div className="max-h-[28rem] overflow-y-auto">
-            {loading && items.length === 0 ? (
+          <div className="max-h-[28rem] overflow-y-auto divide-y divide-border">
+            {loading && !summary ? (
               <p className="px-4 py-10 text-center text-sm text-slate-500">Loading...</p>
-            ) : items.length === 0 ? (
+            ) : !hasRows ? (
               <div className="px-6 py-10 text-center">
                 <p className="text-sm font-semibold">You&apos;re all caught up</p>
-                <p className="mt-1 text-xs text-slate-500">Updates from sellers you follow and listings that match your interests will appear here.</p>
+                <p className="mt-1 text-xs text-slate-500">Messages from other members and updates from Vera Market will appear here.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {items.map((item) => <li key={item.id}><NotificationItem notification={item} onOpen={openItem} /></li>)}
-              </ul>
+              <>
+                {chatGroups.length > 0 && (
+                  <>
+                    <p className="bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Messages</p>
+                    <ul className="divide-y divide-border">
+                      {chatGroups.map((group) => (
+                        <li key={group.conversationId}><ChatGroupRow group={group} onNavigate={closeAndNavigate} /></li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {system && (
+                  <>
+                    <p className="bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Updates</p>
+                    <ul className="divide-y divide-border">
+                      <li><SystemGroupRow system={system} onNavigate={closeAndNavigate} /></li>
+                    </ul>
+                  </>
+                )}
+              </>
             )}
           </div>
           <Link href="/notifications" onClick={() => setOpen(false)} className="block border-t border-border px-4 py-3 text-center text-sm font-semibold text-brand hover:bg-brand-light">
