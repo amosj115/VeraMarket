@@ -11,7 +11,6 @@ import { durationEnum, ensureBoostPackages } from "@/lib/boosts";
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!integrations.paystack.configured) return NextResponse.json({ error: "Boost payments are not configured. Add Paystack credentials before accepting payment.", missing: integrations.paystack.missing }, { status: 503 });
   const parsed = boostSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid boost request" }, { status: 400 });
   const { targetType, targetId } = parsed.data;
@@ -24,8 +23,11 @@ export async function POST(request: NextRequest) {
     await ensureBoostPackages();
     const pack = await prisma.boostPackage.findFirst({ where: { id: parsed.data.packageId, enabled: true } });
     if (!pack) return NextResponse.json({ error: "That boost package is not available." }, { status: 404 });
+    if (pack.priceCents <= 0) return NextResponse.json({ error: "This boost package has no price configured yet, so it cannot be sold. Set a price in admin config before offering it." }, { status: 400 });
     amountCents = pack.priceCents; durationDays = pack.durationDays; priority = pack.priority; packageId = pack.id; duration = durationEnum(pack.durationDays);
   }
+  if (amountCents <= 0) return NextResponse.json({ error: "This boost has no price configured yet. Set a price before accepting payment." }, { status: 400 });
+  if (!integrations.paystack.configured) return NextResponse.json({ error: "Boost payments are not configured. Add Paystack credentials before accepting payment.", missing: integrations.paystack.missing }, { status: 503 });
   let ownerId: string | undefined;
   if (targetType === "LISTING") ownerId = (await prisma.listing.findUnique({ where: { id: targetId }, select: { sellerId: true } }))?.sellerId;
   if (targetType === "SHOP") ownerId = (await prisma.shop.findUnique({ where: { id: targetId }, select: { ownerId: true } }))?.ownerId;

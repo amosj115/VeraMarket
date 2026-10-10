@@ -8,6 +8,7 @@ import { FavoriteToggle } from "@/components/favorites/favorite-toggle";
 import { FollowButton } from "@/components/follow/follow-button";
 import { VerifiedBadge } from "@/components/profile/verified-badge";
 import { appUrl } from "@/lib/app-url";
+import { isShopVisible } from "@/lib/shops";
 import { getTrust } from "@/lib/trust";
 import { listAchievements } from "@/lib/achievements";
 import { publicUrl } from "@/lib/share";
@@ -40,9 +41,13 @@ export default async function ShopDetailPage({ params, searchParams }: { params:
 			owner: { select: { id: true, displayName: true, username: true, profileVerification: true } },
 		},
 	});
-	if (!shop || shop.status !== "ACTIVE" || shop.isPaused || shop.subscription?.status !== "ACTIVE") notFound();
+	if (!shop || !isShopVisible(shop)) notFound();
 
-	const [trust, achievements] = await Promise.all([getTrust(shop.owner.id), listAchievements(shop.owner.id)]);
+	const [trust, achievements, sellerListings] = await Promise.all([
+		getTrust(shop.owner.id),
+		listAchievements(shop.owner.id),
+		prisma.listing.findMany({ where: { sellerId: shop.owner.id, status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, slug: true, title: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } }),
+	]);
 	const earned = achievements.filter((item) => item.awardedAt);
 	const url = publicUrl(appUrl(), "SHOP", shop.slug);
 	const jsonLd = { "@context": "https://schema.org", "@type": "Store", name: shop.name, description: shop.description.slice(0, 300), url, ...(shop.logoUrl ? { image: shop.logoUrl.startsWith("http") ? shop.logoUrl : appUrl() + shop.logoUrl } : {}) };
@@ -61,5 +66,5 @@ export default async function ShopDetailPage({ params, searchParams }: { params:
 				{shop.categories.map((category) => <option key={category.id} value={category.slug}>{category.name}</option>)}
 			</select>
 			<button type="submit" className="rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand">Filter</button>
-		</form></div>{filteredProducts.length === 0 ? <p className="mt-5 rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-slate-500">{query || categorySlug ? "No products match your search." : "This virtual store has not added any products yet."}</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filteredProducts.map((product) => <div key={product.id} className="rounded-lg border border-border bg-white p-4"><h3 className="font-medium">{product.name}</h3>{product.category && <p className="mt-1 text-xs font-medium uppercase tracking-wide text-brand">{product.category.name}</p>}<p className="mt-2 text-sm text-slate-500">{product.description}</p><p className="mt-4 font-semibold text-brand">{formatZAR(product.priceCents)}</p>{product.salePriceCents && <p className="mt-1 text-xs text-emerald-700">Sale price {formatZAR(product.salePriceCents)}</p>}</div>)}</div>}</section></div>;
+		</form></div>{filteredProducts.length === 0 ? <p className="mt-5 rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-slate-500">{query || categorySlug ? "No products match your search." : "This virtual store has not added any products yet."}</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filteredProducts.map((product) => <div key={product.id} className="rounded-lg border border-border bg-white p-4"><h3 className="font-medium">{product.name}</h3>{product.category && <p className="mt-1 text-xs font-medium uppercase tracking-wide text-brand">{product.category.name}</p>}<p className="mt-2 text-sm text-slate-500">{product.description}</p><p className="mt-4 font-semibold text-brand">{formatZAR(product.priceCents)}</p>{product.salePriceCents && <p className="mt-1 text-xs text-emerald-700">Sale price {formatZAR(product.salePriceCents)}</p>}</div>)}</div>}</section>{sellerListings.length > 0 && <section className="mt-10"><h2 className="text-lg font-semibold">More from this seller</h2><p className="mt-1 text-sm text-slate-500">Marketplace listings from {shop.owner.displayName}. Each one carries this store&apos;s 🏪 badge while the subscription is active.</p><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{sellerListings.map((item) => <Link key={item.id} href={`/listing/${item.slug}`} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md"><div className="relative aspect-square bg-slate-100">{item.images[0] ? <Image src={item.images[0].url} alt={item.title} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}</div><div className="p-3"><p className="truncate text-sm font-medium">{item.title}</p><p className="mt-1 text-sm font-semibold text-brand">{formatZAR(item.priceCents)}</p><p className="mt-1 truncate text-xs text-slate-500">{item.location}</p></div></Link>)}</div></section>}</div>;
 }

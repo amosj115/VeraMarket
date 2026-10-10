@@ -78,3 +78,25 @@ export const BOOST_PRICING_ZAR_CENTS: Record<
   SEVEN_DAYS: 12000,
   THIRTY_DAYS: 35000,
 };
+
+// Virtual Store subscription price (5900 = R59/month). This is the single source
+// used when creating a store; each Shop row stores it in monthlyPriceCents and the
+// seller is always charged the amount shown on their shop row before checkout.
+export const VIRTUAL_STORE_MONTHLY_ZAR_CENTS = 5900;
+
+/**
+ * Prices for the percent-level listing boosts, in ZAR cents.
+ *
+ * ENTER PRICES HERE before selling them: a value of 0 means "not priced yet" and
+ * every purchase attempt for that package is rejected with a clear error until a
+ * real price exists. After seeding, admins can override each package price any time
+ * under /admin/config -> "Vera Boost packages" (the database value wins over this
+ * seed value), so this constant is only the default for a fresh environment.
+ */
+export const BOOST_VISIBILITY_PRICING_ZAR_CENTS: Record<
+  "FIFTY_PERCENT" | "ONE_HUNDRED_PERCENT",
+  number
+> = {
+  FIFTY_PERCENT: 0, // e.g. 9900 = R99 for 50% for 7 days
+  ONE_HUNDRED_PERCENT: 0, // e.g. 17900 = R179 for 100% for 7 days
+};

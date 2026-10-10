@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/app-url";
 import { formatZAR } from "@/lib/utils";
 import { getTrust } from "@/lib/trust";
+import { activeStoreForSeller } from "@/lib/shops";
 import { publicPath, publicUrl } from "@/lib/share";
 import { cardMetadata, getShareCard, unavailableMetadata } from "@/lib/share-meta";
 import { ListingActions } from "@/components/listings/listing-actions";
@@ -76,6 +77,7 @@ export default async function ListingPage({ params }: Props) {
 
   const url = publicUrl(appUrl(), "LISTING", listing.slug);
   const trust = await getTrust(listing.seller.id);
+  const store = await activeStoreForSeller(listing.seller.id);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -105,6 +107,7 @@ export default async function ListingPage({ params }: Props) {
           <p className="text-sm text-brand">{listing.category.name}</p>
           <div className="mt-2 flex items-start justify-between gap-3"><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{listing.title}</h1><ShareButton target="LISTING" targetId={listing.id} url={url} title={listing.title} className="shrink-0 !px-3 !py-2" /></div>
           <p className="mt-3 text-2xl font-semibold text-brand">{formatZAR(listing.priceCents)}</p>
+          {store && <Link href={`/shops/${store.slug}`} className="mt-3 inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark">🏪 Available in Virtual Store <span className="font-normal opacity-90">Visit Store →</span></Link>}
           <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{listing.description}</p>
           <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-5 text-sm"><div><dt className="text-slate-500">Condition</dt><dd className="mt-1 font-medium">{listing.condition.replaceAll("_", " ")}</dd></div><div><dt className="text-slate-500">Location</dt><dd className="mt-1 font-medium">{listing.location}</dd></div></dl>
           <div className="mt-6 rounded-lg border border-border p-4">

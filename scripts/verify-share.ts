@@ -67,7 +67,7 @@ async function main() {
   const sold = await mk("Sold item share test", "SOLD");
   const removed = await mk("Removed item share test", "REMOVED");
   const pending = await mk("Pending item share test", "PENDING_REVIEW");
-  const shop = await prisma.shop.create({ data: { ownerId: seller.user.id, name: "Tokyo Drift Share Test", slug: `tokyo-drift-${run}`, description: "Tyres and wheels", address: "1 Test Street, Cape Town", phone: "0821112222", email: `private-${run}@example.test`, status: "ACTIVE", subscriptionStatus: "ACTIVE", subscription: { create: { status: "ACTIVE" } } } });
+  const shop = await prisma.shop.create({ data: { ownerId: seller.user.id, name: "Tokyo Drift Share Test", slug: `tokyo-drift-${run}`, description: "Tyres and wheels", address: "1 Test Street, Cape Town", phone: "0821112222", email: `private-${run}@example.test`, status: "ACTIVE", subscriptionStatus: "ACTIVE", subscription: { create: { status: "ACTIVE", expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } } } });
 
   // Public listing page (logged out)
   const lp = await anon(`/listing/${active.slug}`);

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { createListingSchema } from "@/lib/validation/listing";
 import { slugify } from "@/lib/utils";
-import { activeListingBoosts } from "@/lib/boosts";
+import { activeListingBoosts, listingWeight } from "@/lib/boosts";
+import { activeStoreOwners } from "@/lib/shops";
 
 // Haversine formula to calculate distance between two points in kilometers
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -112,14 +113,41 @@ export async function GET(request: NextRequest) {
     listings = listings.slice(0, pageSize);
   }
 
-  const boosts = await activeListingBoosts();
+  // Placement weights: paid boosts (duration packages 1-4, percent packages 50/100)
+  // and the 25% Virtual Store baseline, taken as the maximum of the two per listing.
+  // Organic order stays newest-first; on page 1 the strongest weighted listings are
+  // merged in front, so 100 > 50 > 25 > paid duration tiers > organic. Distance
+  // sorting is explicit user intent and is never overridden by placement.
+  const [boosts, stores] = await Promise.all([activeListingBoosts(), activeStoreOwners()]);
+  const weightOf = (listing: { id: string; sellerId: string }) => listingWeight(boosts.get(listing.id), stores.has(listing.sellerId));
   let ordered = listings;
-  if (page === 1 && boosts.size) {
-    const boosted = (await prisma.listing.findMany({ where: { ...where, id: { in: [...boosts.keys()] } }, take: 12, include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: { select: { name: true, slug: true } } } })).filter(withinRadius);
-    const merged = new Map([...boosted, ...listings].map((listing) => [listing.id, listing]));
-    ordered = [...merged.values()].sort((a, b) => (boosts.get(b.id) ?? 0) - (boosts.get(a.id) ?? 0) || b.createdAt.getTime() - a.createdAt.getTime()).slice(0, pageSize);
+  if (page === 1 && !sortByDistance && (boosts.size || stores.size)) {
+    const boostedIds = [...boosts.keys()];
+    const storeOwnerIds = [...stores.keys()];
+    const candidateOr = [
+      ...(boostedIds.length ? [{ id: { in: boostedIds } }] : []),
+      ...(storeOwnerIds.length ? [{ sellerId: { in: storeOwnerIds } }] : []),
+    ];
+    // Fetch a generous window of weighted candidates matching the current filters,
+    // keep the strongest 12, and let the final sort place them above organic pages.
+    const candidates = (await prisma.listing.findMany({
+      where: { ...where, AND: [{ OR: candidateOr }] },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: { select: { name: true, slug: true } } },
+    })).filter(withinRadius);
+    const promoted = candidates
+      .map((listing) => ({ listing, weight: weightOf(listing) }))
+      .filter((row) => row.weight > 0)
+      .sort((a, b) => b.weight - a.weight || b.listing.createdAt.getTime() - a.listing.createdAt.getTime())
+      .slice(0, 12)
+      .map((row) => row.listing);
+    const merged = new Map([...promoted, ...listings].map((listing) => [listing.id, listing]));
+    ordered = [...merged.values()]
+      .sort((a, b) => weightOf(b) - weightOf(a) || b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, pageSize);
   }
-  return NextResponse.json({ listings: ordered.map((listing) => ({ ...listing, boosted: boosts.has(listing.id) })), total, page, pageSize });
+  return NextResponse.json({ listings: ordered.map((listing) => ({ ...listing, boosted: (boosts.get(listing.id) ?? 0) > 0, visibilityWeight: weightOf(listing), store: stores.get(listing.sellerId) ?? null })), total, page, pageSize });
 }
 
 export async function POST(request: NextRequest) {

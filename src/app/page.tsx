@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getTrendingPage } from "@/lib/trending";
 import { formatZAR } from "@/lib/utils";
+import { activeShopFilter } from "@/lib/shops";
 import { Greeting } from "@/components/home/greeting";
 import { HeartButton } from "@/components/home/heart-button";
 
@@ -15,7 +16,7 @@ const firstImage = { take: 1, orderBy: { sortOrder: "asc" as const }, select: { 
 async function getHomeCovers() {
   const [listing, shop, service, property] = await Promise.all([
     prisma.listing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
-    prisma.shop.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
+    prisma.shop.findFirst({ where: { ...activeShopFilter(), images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
     prisma.serviceListing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
     prisma.propertyListing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
   ]);

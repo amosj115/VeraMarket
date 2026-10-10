@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Separate dist dirs used by the verify-* test harnesses (NEXT_DIST_DIR=.next-persona-<port>).
+    ".next-persona-*/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

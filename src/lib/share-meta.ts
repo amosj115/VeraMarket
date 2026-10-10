@@ -26,8 +26,8 @@ export async function getShareCard(target: Exclude<ShareTarget, "PROFILE">, slug
       return { target, title: row.title, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: formatZAR(row.priceCents), imageUrl: absolute(row.images[0]?.url), byline: `${row.seller.displayName} · ${row.location}`, path: publicPath(target, slug) };
     }
     case "SHOP": {
-      const row = await prisma.shop.findUnique({ where: { slug }, select: { name: true, description: true, status: true, isPaused: true, logoUrl: true, coverUrl: true, address: true, subscription: { select: { status: true } }, owner: { select: { displayName: true } } } });
-      if (!row || row.status !== "ACTIVE" || row.isPaused || row.subscription?.status !== "ACTIVE") return null;
+      const row = await prisma.shop.findUnique({ where: { slug }, select: { name: true, description: true, status: true, isPaused: true, logoUrl: true, coverUrl: true, address: true, subscription: { select: { status: true, expiresAt: true } }, owner: { select: { displayName: true } } } });
+      if (!row || row.status !== "ACTIVE" || row.isPaused || row.subscription?.status !== "ACTIVE" || !row.subscription.expiresAt || row.subscription.expiresAt <= new Date()) return null;
       return { target, title: row.name, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: null, imageUrl: absolute(row.coverUrl ?? row.logoUrl), byline: `Virtual Shop by ${row.owner.displayName}`, path: publicPath(target, slug) };
     }
     case "SERVICE": {

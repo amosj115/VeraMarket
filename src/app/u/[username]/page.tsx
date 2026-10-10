@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
 import { getTrust } from "@/lib/trust";
+import { activeShopFilter } from "@/lib/shops";
 import { VerifiedBadge } from "@/components/profile/verified-badge";
 import { appUrl } from "@/lib/app-url";
 import { publicUrl } from "@/lib/share";
@@ -27,7 +28,7 @@ export default async function PublicProfilePage({ params }: Props) {
     select: {
       id: true, displayName: true, username: true, avatarUrl: true, bio: true, location: true, createdAt: true, profileVerification: true, phoneVerification: true,
       listings: { where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, slug: true, title: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } },
-      shops: { where: { status: "ACTIVE", isPaused: false, subscriptionStatus: "ACTIVE" }, orderBy: { createdAt: "desc" }, select: { id: true, slug: true, name: true, description: true } },
+      shops: { where: activeShopFilter(), orderBy: { createdAt: "desc" }, select: { id: true, slug: true, name: true, description: true } },
       services: { where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, slug: true, title: true, serviceArea: true } },
       properties: { where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, slug: true, title: true, priceCents: true, location: true } },
     },

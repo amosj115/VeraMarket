@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { activeShopFilter } from "@/lib/shops";
 
 export const dynamic = "force-dynamic";
 
 export default async function ShopsPage() {
   const shops = await prisma.shop.findMany({
-    where: { status: "ACTIVE", isPaused: false, subscriptionStatus: "ACTIVE" },
+    where: activeShopFilter(),
     orderBy: { createdAt: "desc" },
     select: { id: true, name: true, slug: true, description: true, address: true, verification: true, _count: { select: { products: true } } },
   });

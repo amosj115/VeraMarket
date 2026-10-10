@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { activeListingBoosts } from "@/lib/boosts";
 import { MarketplaceClient } from "./marketplace-client";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +14,11 @@ export default async function MarketplacePage({ searchParams }: { searchParams: 
   const buyerLng = params.lng ? parseFloat(Array.isArray(params.lng) ? params.lng[0] : params.lng) : null;
   const sortByDistance = Array.isArray(params.sort) ? params.sort[0] === "distance" : params.sort === "distance";
 
-  const [categories, boosts] = await Promise.all([
-    prisma.category.findMany({ where: { domain: "MARKETPLACE", isEnabled: true }, orderBy: { sortOrder: "asc" } }),
-    activeListingBoosts(),
-  ]);
+  const categories = await prisma.category.findMany({ where: { domain: "MARKETPLACE", isEnabled: true }, orderBy: { sortOrder: "asc" } });
 
   return (
     <MarketplaceClient
       initialCategories={categories}
-      initialBoosts={boosts}
       initialQuery={query}
       initialCategory={category}
       initialRadius={Number.isFinite(radius) ? radius : null}

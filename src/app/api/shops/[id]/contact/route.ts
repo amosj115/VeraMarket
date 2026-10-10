@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { blockedBetween } from "@/lib/chat-safety";
 import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { recordShareChat } from "@/lib/share-events";
+import { activeShopFilter } from "@/lib/shops";
 
 const schema = z.object({ message: z.string().trim().min(1).max(2000), viaShare: z.boolean().optional() });
 
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
 
   const { id } = await params;
-  const shop = await prisma.shop.findFirst({ where: { id, status: "ACTIVE", isPaused: false }, select: { id: true, name: true, ownerId: true } });
+  const shop = await prisma.shop.findFirst({ where: { id, ...activeShopFilter() }, select: { id: true, name: true, ownerId: true } });
   if (!shop) return NextResponse.json({ error: "This shop is no longer available." }, { status: 404 });
   if (shop.ownerId === session.user.id) return NextResponse.json({ error: "You cannot message your own shop." }, { status: 400 });
   if (await blockedBetween(session.user.id, shop.ownerId)) return NextResponse.json({ error: "You cannot message this seller." }, { status: 403 });

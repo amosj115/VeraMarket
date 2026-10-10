@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatZAR } from "@/lib/utils";
 
 type ShopCategory = { id: string; name: string; slug: string; description: string | null; sortOrder: number };
 type Product = {
@@ -26,7 +27,10 @@ type ShopData = {
   coverUrl: string | null;
   status: string;
   isPaused: boolean;
-  subscription?: { status: string | null } | null;
+  monthlyPriceCents: number;
+  subscription?: { status: string | null; expiresAt?: string | Date | null } | null;
+  subscriptionActive: boolean;
+  renewingSoon: boolean;
   categories: ShopCategory[];
   products: Product[];
 };
@@ -120,6 +124,27 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
     router.refresh();
   }
 
+  // Start (or renew) the R59/month subscription through Paystack; the store only
+  // becomes public after the payment webhook confirms the charge.
+  async function subscribe() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/shops/${shop.id}/subscription`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "subscribe" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.authorizationUrl) throw new Error(data.error ?? "Could not start subscription payment.");
+      window.location.assign(data.authorizationUrl);
+      return;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not start subscription payment.");
+    }
+    setBusy(false);
+  }
+
   async function saveCategory(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -163,6 +188,12 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
     setBusy(false);
   }
 
+  const subStatus = shop.subscription?.status ?? "PENDING";
+  const expiresAt = shop.subscription?.expiresAt ? new Date(shop.subscription.expiresAt) : null;
+  const subscriptionActive = shop.subscriptionActive;
+  const renewingSoon = shop.renewingSoon;
+  const showSubscribe = !subscriptionActive || renewingSoon;
+
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-white">
       <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
@@ -202,6 +233,26 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
         </form>
 
         <div className="space-y-5">
+          <div className="rounded-md border border-brand/30 bg-brand/5 p-3">
+            <h3 className="text-sm font-semibold">Monthly subscription</h3>
+            <p className="mt-1 text-xs text-slate-600">{formatZAR(shop.monthlyPriceCents)} per month, charged through Paystack. Your store is only public while the subscription is active.</p>
+            <p className="mt-2 text-xs text-slate-700">
+              {subscriptionActive ? (
+                <>Status: <span className="font-semibold text-emerald-700">Active</span> until {expiresAt?.toLocaleDateString("en-ZA")}{renewingSoon ? " — renewing keeps your store online without interruption" : ""}</>
+              ) : subStatus === "PENDING" ? (
+                <span className="font-semibold text-amber-700">Status: waiting for payment</span>
+              ) : (
+                <span className="font-semibold text-red-700">Status: {subStatus.toLowerCase()} — store hidden from public pages</span>
+              )}
+            </p>
+            {showSubscribe && (
+              <button type="button" disabled={busy} onClick={subscribe} className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                {busy ? "Redirecting..." : subscriptionActive ? `Renew for ${formatZAR(shop.monthlyPriceCents)}/month` : `Subscribe for ${formatZAR(shop.monthlyPriceCents)}/month`}
+              </button>
+            )}
+            <p className="mt-3 text-xs text-slate-500">While active, your marketplace listings show an 🏪 &quot;Available in Virtual Store&quot; badge and receive a 25% visibility boost — the listing itself appears in search results as usual, so nothing needs to be published twice.</p>
+          </div>
+
           <div className="rounded-md border border-border bg-slate-50 p-3">
             <h3 className="text-sm font-semibold">Store categories</h3>
             <form onSubmit={saveCategory} className="mt-3 space-y-2">

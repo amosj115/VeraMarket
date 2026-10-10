@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { createShopSchema } from "@/lib/validation/shop";
 import { slugify } from "@/lib/utils";
+import { activeShopFilter } from "@/lib/shops";
+import { VIRTUAL_STORE_MONTHLY_ZAR_CENTS } from "@/lib/config";
 
 export async function GET() {
   const shops = await prisma.shop.findMany({
-    where: { status: "ACTIVE", isPaused: false, subscriptionStatus: "ACTIVE" },
+    where: activeShopFilter(),
     orderBy: { createdAt: "desc" },
     include: { products: { where: { isAvailable: true }, take: 3 } },
   });
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest) {
       slug,
       status: "PENDING_REVIEW",
       subscriptionStatus: "PENDING",
-      monthlyPriceCents: 5900,
+      monthlyPriceCents: VIRTUAL_STORE_MONTHLY_ZAR_CENTS,
     },
     select: { id: true, slug: true, status: true, subscriptionStatus: true },
   });

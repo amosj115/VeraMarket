@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/boosts/expire", "schedule": "0 1 * * *" },
     { "path": "/api/notifications/cleanup", "schedule": "0 2 * * *" },
-    { "path": "/api/trending/notify", "schedule": "0 3 * * *" }
+    { "path": "/api/trending/notify", "schedule": "0 3 * * *" },
+    { "path": "/api/shops/expire", "schedule": "0 4 * * *" }
   ]
 }

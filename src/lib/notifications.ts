@@ -1,6 +1,7 @@
 import type { NotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
+import { activeShopFilter } from "@/lib/shops";
 
 const SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const SEARCH_SCAN_LIMIT = 5000;
@@ -168,7 +169,7 @@ async function notifyProperty(id: string) {
 
 async function notifyShopProduct(id: string) {
   const product = await prisma.shopProduct.findFirst({
-    where: { id, isAvailable: true, shop: { status: "ACTIVE", isPaused: false, subscriptionStatus: "ACTIVE" } },
+    where: { id, isAvailable: true, shop: activeShopFilter() },
     select: { id: true, name: true, priceCents: true, shop: { select: { id: true, slug: true, name: true, ownerId: true } }, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!product) return 0;

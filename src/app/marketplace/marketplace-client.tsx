@@ -32,11 +32,13 @@ type ListingCard = {
   longitude: number | null;
   category: { name: string; slug: string };
   images: Array<{ url: string }>;
+  boosted: boolean;
+  visibilityWeight: number;
+  store: { id: string; slug: string; name: string } | null;
 };
 
 export function MarketplaceClient({
   initialCategories,
-  initialBoosts,
   initialQuery,
   initialCategory,
   initialRadius,
@@ -45,7 +47,6 @@ export function MarketplaceClient({
   initialSortByDistance,
 }: {
   initialCategories: { id: string; name: string; slug: string }[];
-  initialBoosts: Map<string, number>;
   initialQuery: string;
   initialCategory: string;
   initialRadius: number | null;
@@ -62,7 +63,6 @@ export function MarketplaceClient({
   const [useMyLocation, setUseMyLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [categories] = useState(initialCategories);
-  const [boosts] = useState(initialBoosts);
   const [listings, setListings] = useState<ListingCard[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -231,7 +231,10 @@ export function MarketplaceClient({
             {listings.map((listing) => (
               <Link key={listing.id} href={`/listing/${listing.slug}`} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
                 <div className="relative aspect-square bg-slate-100">
-                  {boosts.has(listing.id) && <span className="absolute left-2 top-2 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-amber-950">Boosted</span>}
+                  <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
+                    {listing.boosted && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-amber-950">Boosted</span>}
+                    {listing.store && <span className="truncate rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">🏪 Available in Virtual Store</span>}
+                  </div>
                   {listing.images[0] ? <Image src={listing.images[0].url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}
                   {listing.latitude != null && listing.longitude != null && buyerLat != null && buyerLng != null && (
                     <span className="absolute right-2 bottom-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">

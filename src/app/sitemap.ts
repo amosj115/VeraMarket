@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/app-url";
 import { publicPath } from "@/lib/share";
+import { activeShopFilter } from "@/lib/shops";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const active = { status: "ACTIVE" as const };
   const [listings, shops, services, properties] = await Promise.all([
     prisma.listing.findMany({ where: active, select: { slug: true, updatedAt: true }, orderBy: { updatedAt: "desc" }, take: 5000 }),
-    prisma.shop.findMany({ where: { ...active, isPaused: false, subscription: { status: "ACTIVE" } }, select: { slug: true, updatedAt: true }, take: 5000 }),
+    prisma.shop.findMany({ where: activeShopFilter(), select: { slug: true, updatedAt: true }, take: 5000 }),
     prisma.serviceListing.findMany({ where: active, select: { slug: true, updatedAt: true }, take: 5000 }),
     prisma.propertyListing.findMany({ where: active, select: { slug: true, updatedAt: true }, take: 5000 }),
   ]);

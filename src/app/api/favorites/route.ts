@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { activeShopFilter } from "@/lib/shops";
 
 const favoriteSchema = z.object({ targetType: z.enum(["LISTING", "SHOP", "SHOP_PRODUCT", "SERVICE", "PROPERTY"]), targetId: z.string().cuid() });
 
@@ -30,13 +31,13 @@ export async function POST(request: NextRequest) {
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
     await prisma.favorite.create({ data: { userId: session.user.id, listingId: targetId } });
   } else if (targetType === "SHOP") {
-    const target = await prisma.shop.findFirst({ where: { id: targetId, status: "ACTIVE" }, select: { id: true } });
+    const target = await prisma.shop.findFirst({ where: { id: targetId, ...activeShopFilter() }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     const existing = await prisma.favorite.findFirst({ where: { userId: session.user.id, shopId: targetId } });
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
     await prisma.favorite.create({ data: { userId: session.user.id, shopId: targetId } });
   } else if (targetType === "SHOP_PRODUCT") {
-    const target = await prisma.shopProduct.findFirst({ where: { id: targetId, shop: { status: "ACTIVE", isPaused: false, subscriptionStatus: "ACTIVE" } }, select: { id: true } });
+    const target = await prisma.shopProduct.findFirst({ where: { id: targetId, shop: activeShopFilter() }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "Store product not found" }, { status: 404 });
     const existing = await prisma.favorite.findFirst({ where: { userId: session.user.id, shopProductId: targetId } });
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
