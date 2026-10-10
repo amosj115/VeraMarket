@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { prepareImageForUpload } from "@/lib/client-image";
 
 // Leaflet accesses `window` at import time, so it must never render on the server.
 const Map = dynamic(() => import("@/components/map/Map").then((mod) => mod.Map), {
@@ -168,8 +169,15 @@ export default function SellPage() {
 
       const imageUrls: string[] = [];
       for (const file of files) {
+        // Compresses oversized photos (and converts HEIC) before uploading.
+        let prepared: File;
+        try {
+          prepared = await prepareImageForUpload(file);
+        } catch (err) {
+          throw new Error(err instanceof Error ? err.message : `We couldn't prepare "${file.name}". Please choose another photo.`);
+        }
         const body = new FormData();
-        body.append("file", file);
+        body.append("file", prepared);
         const response = await fetch("/api/uploads", {
           method: "POST",
           body,

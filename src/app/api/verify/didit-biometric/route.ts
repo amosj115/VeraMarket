@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { StorageError, readStoredImage } from "@/lib/storage";
-import { detectImageType } from "@/lib/security/image";
+import { IMAGE_MAX_BYTES, detectImageType } from "@/lib/security/image";
 import { MAX_ATTEMPTS_PER_DAY, MIN_SECONDS_BETWEEN_ATTEMPTS } from "@/lib/face-verification-shared";
 import { verifyBiometric, type DiditBiometricResult, type DiditFailureCode, getDiditProviderStatus, DIDIT_FAILURE_MESSAGES } from "@/lib/didit-biometric";
 
-const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
+// Same platform request-body ceiling as every other image route.
+const MAX_CAPTURE_BYTES = IMAGE_MAX_BYTES;
 
 export async function POST(request: NextRequest) {
   const session = await auth();

@@ -94,7 +94,8 @@ export async function putPublicImage(
 
     return result.secure_url;
   } catch (error) {
-    console.error("[cloudinary] upload failed", error);
+    // Log only the message — Cloudinary error objects can embed request details.
+    console.error("[cloudinary] upload failed", error instanceof Error ? error.message.slice(0, 200) : "unknown");
 
     throw new StorageError(
       "We couldn't save your image right now. Please try again shortly.",
@@ -199,7 +200,7 @@ export async function readStoredImage(url: string): Promise<Uint8Array> {
 
     return new Uint8Array(await response.arrayBuffer());
   } catch (error) {
-    console.error("[cloudinary] read failed", error);
+    console.error("[cloudinary] read failed", error instanceof Error ? error.message.slice(0, 200) : "unknown");
 
     throw new StorageError(
       "Image storage is temporarily unavailable.",
@@ -229,6 +230,6 @@ export async function deleteStoredImage(
       invalidate: true,
     });
   } catch (error) {
-    console.error("[cloudinary] delete failed", error);
+    console.error("[cloudinary] delete failed", error instanceof Error ? error.message.slice(0, 200) : "unknown");
   }
 }

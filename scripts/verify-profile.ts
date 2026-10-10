@@ -1,7 +1,7 @@
 import "dotenv/config";
 import "./db-guard";
 import http from "node:http";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/security/password";
@@ -55,10 +55,16 @@ class Client {
   post(path: string, body: unknown) { return this.json(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); }
 }
 
-// Minimal valid-signature images; the app only checks magic bytes, the stub provider does the "matching".
-const png = () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])], { type: "image/png" });
+// Real images: the photo route validates dimensions, so it needs a real PNG.
+// The stub provider does the "matching"; verify-face captures are magic-bytes-only.
+let pngBytes: Uint8Array<ArrayBuffer> | null = null;
+async function png() {
+  // Fresh ArrayBuffer-backed copy so the Blob accepts it under TS 5.7 typing.
+  pngBytes ??= new Uint8Array(await readFile(path.join(process.cwd(), "scripts", "fixtures", "profile-photo.png")));
+  return new Blob([pngBytes], { type: "image/png" });
+}
 const jpg = () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4])], { type: "image/jpeg" });
-function photoForm(consent: boolean) { const f = new FormData(); f.append("file", png(), "me.png"); if (consent) f.append("consent", "true"); return f; }
+async function photoForm(consent: boolean) { const f = new FormData(); f.append("file", await png(), "me.png"); if (consent) f.append("consent", "true"); return f; }
 function captureForm() { const f = new FormData(); for (let i = 0; i < 3; i++) f.append(`capture_${i}`, jpg(), `c${i}.jpg`); return f; }
 
 async function makeUser(base: string, tag: string) {
@@ -76,7 +82,7 @@ async function main() {
 
   // --- Server without a provider: must say so, never fake a result.
   const N = await makeUser(SERVER_NO_PROVIDER, "n");
-  const ready = await N.client.json("/api/profile/photo", { method: "POST", body: photoForm(true) });
+  const ready = await N.client.json("/api/profile/photo", { method: "POST", body: await photoForm(true) });
   check("photo upload works without provider", ready.status === 201, ready.body);
   const noProvider = await N.client.json("/api/profile/verify-face", { method: "POST", body: captureForm() });
   check("verification reports NOT_CONFIGURED (503) when no provider", noProvider.status === 503 && noProvider.body.code === "NOT_CONFIGURED", noProvider.body);
@@ -100,10 +106,10 @@ async function main() {
   }
 
   check("verify before photo is rejected", (await A.client.json("/api/profile/verify-face", { method: "POST", body: captureForm() })).body?.code === "PHOTO_REQUIRED");
-  check("photo without consent rejected", (await A.client.json("/api/profile/photo", { method: "POST", body: photoForm(false) })).status === 400);
+  check("photo without consent rejected", (await A.client.json("/api/profile/photo", { method: "POST", body: await photoForm(false) })).status === 400);
   const bad = new FormData(); bad.append("file", new Blob(["not an image"], { type: "image/png" }), "x.png"); bad.append("consent", "true");
   check("non-image upload rejected", (await A.client.json("/api/profile/photo", { method: "POST", body: bad })).status === 400);
-  check("photo with consent accepted", (await A.client.json("/api/profile/photo", { method: "POST", body: photoForm(true) })).status === 201);
+  check("photo with consent accepted", (await A.client.json("/api/profile/photo", { method: "POST", body: await photoForm(true) })).status === 201);
   const incomplete = new FormData(); incomplete.append("capture_0", jpg(), "c.jpg");
   check("incomplete camera capture rejected", (await A.client.json("/api/profile/verify-face", { method: "POST", body: incomplete })).status === 400);
 
@@ -140,7 +146,7 @@ async function main() {
   const listingHtml = await (await fetch(`${SERVER_WITH_PROVIDER}/listing/${created.body.listing.slug}`)).text();
   check("listing seller block shows Verified Person badge", listingHtml.includes("Verified Person"));
 
-  const swap = await A.client.json("/api/profile/photo", { method: "POST", body: photoForm(true) });
+  const swap = await A.client.json("/api/profile/photo", { method: "POST", body: await photoForm(true) });
   check("changing the photo resets verification", swap.status === 201 && (await A.client.json("/api/profile/verification")).body.status === "NOT_VERIFIED");
   check("gated again after photo change", (await A.client.post("/api/listings", listingBody)).status === 403);
 

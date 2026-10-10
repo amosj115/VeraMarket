@@ -2,6 +2,8 @@ import "dotenv/config";
 import "./db-guard";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 // Exercises the real Persona integration code paths against locally started servers:
@@ -44,8 +46,14 @@ class Client {
   async json(path: string, init: RequestInit = {}) { const res = await this.req(path, init); return { status: res.status, body: await res.json().catch(() => null) }; }
 }
 
-const png = () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])], { type: "image/png" });
-const photoForm = () => { const f = new FormData(); f.append("file", png(), "me.png"); f.append("consent", "true"); return f; };
+// Real PNG: the photo route validates image dimensions, not just magic bytes.
+let pngBytes: Uint8Array<ArrayBuffer> | null = null;
+const png = async () => {
+  // Fresh ArrayBuffer-backed copy so the Blob accepts it under TS 5.7 typing.
+  pngBytes ??= new Uint8Array(await readFile(path.join(process.cwd(), "scripts", "fixtures", "profile-photo.png")));
+  return new Blob([pngBytes], { type: "image/png" });
+};
+const photoForm = async () => { const f = new FormData(); f.append("file", await png(), "me.png"); f.append("consent", "true"); return f; };
 
 async function makeUser(base: string, tag: string) {
   const username = `pa_${run}_${tag}`;
@@ -79,7 +87,7 @@ async function main() {
   // 1. Missing configuration
   const U0 = await makeUser(plain, "cfg");
   check("account creation + login works", Boolean(U0.user.id));
-  check("profile photo upload works (local storage)", (await U0.client.json("/api/profile/photo", { method: "POST", body: photoForm() })).status === 201);
+  check("profile photo upload works (local storage)", (await U0.client.json("/api/profile/photo", { method: "POST", body: await photoForm() })).status === 201);
   const noCfg = await U0.client.json("/api/profile/identity/start", { method: "POST" });
   check("missing Persona config -> 503 NOT_CONFIGURED listing variables", noCfg.status === 503 && noCfg.body.code === "NOT_CONFIGURED" && noCfg.body.missing.includes("PERSONA_API_KEY"), noCfg);
   check("status shows provider unconfigured, user not verified", (await U0.client.json("/api/profile/verification")).body.providerConfigured === false);
@@ -87,14 +95,14 @@ async function main() {
 
   // 2. Storage unavailable
   const U1 = await makeUser(badStorage, "stor");
-  const stor = await U1.client.json("/api/profile/photo", { method: "POST", body: photoForm() });
+  const stor = await U1.client.json("/api/profile/photo", { method: "POST", body: await photoForm() });
   check("storage unavailable -> clear 503 error, no avatar saved", stor.status === 503 && /couldn't save|storage/i.test(stor.body?.error ?? "") && (await prisma.user.findUnique({ where: { id: U1.user.id } }))?.avatarUrl === null, stor);
 
   // 3. Full flow on the Persona-configured server
   const U = await makeUser(withPersona, "main");
   const noPhoto = await U.client.json("/api/profile/identity/start", { method: "POST" });
   check("start requires profile photo first", noPhoto.status === 400 && noPhoto.body.code === "PHOTO_REQUIRED", noPhoto);
-  check("photo upload ok", (await U.client.json("/api/profile/photo", { method: "POST", body: photoForm() })).status === 201);
+  check("photo upload ok", (await U.client.json("/api/profile/photo", { method: "POST", body: await photoForm() })).status === 201);
   const info = (await U.client.json("/api/profile/verification")).body;
   check("status reports persona provider, NOT_VERIFIED", info.provider === "persona" && info.status === "NOT_VERIFIED", info);
   const start = await U.client.json("/api/profile/identity/start", { method: "POST" });
@@ -150,7 +158,7 @@ async function main() {
 
   // Cancel
   const C = await makeUser(withPersona, "cancel");
-  await C.client.json("/api/profile/photo", { method: "POST", body: photoForm() });
+  await C.client.json("/api/profile/photo", { method: "POST", body: await photoForm() });
   const inq3 = `inq_${randomUUID().slice(0, 12)}`;
   await prisma.identityVerification.create({ data: { userId: C.user.id, provider: "persona", externalId: inq3, state: "CREATED" } });
   await prisma.user.update({ where: { id: C.user.id }, data: { profileVerification: "PENDING" } });

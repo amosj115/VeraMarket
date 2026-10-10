@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatZAR } from "@/lib/utils";
+import { prepareImageForUpload } from "@/lib/client-image";
 
 type ShopCategory = { id: string; name: string; slug: string; description: string | null; sortOrder: number };
 type Product = {
@@ -62,12 +63,22 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
   });
 
   async function upload(file: File) {
+    // Compresses oversized images (and converts HEIC) before uploading.
+    let prepared: File;
+    try {
+      prepared = await prepareImageForUpload(file);
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : `We couldn't prepare "${file.name}". Please choose another image.`);
+    }
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", prepared);
     const response = await fetch("/api/uploads", { method: "POST", body: form });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error ?? "Image upload failed");
-    return data.url as string;
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = data && typeof data === "object" && typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : null;
+      throw new Error(message ?? "Image upload failed");
+    }
+    return (data as { url: string }).url;
   }
 
   async function saveDetails(event: React.FormEvent<HTMLFormElement>) {

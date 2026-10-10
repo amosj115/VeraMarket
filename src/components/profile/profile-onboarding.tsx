@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PhoneVerification } from "@/components/verification/phone-verification";
+import { prepareImageForUpload, uploadProfilePhoto } from "@/lib/client-image";
 import { FACE_FAILURE_MESSAGES, VERIFICATION_PROMPTS, type FaceFailureCode } from "@/lib/face-verification-shared";
 import { DIDIT_FAILURE_MESSAGES, type DiditFailureCode } from "@/lib/didit-biometric";
 
@@ -40,6 +41,8 @@ export function ProfileOnboarding() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -88,22 +91,35 @@ export function ProfileOnboarding() {
   function pickFile(selected: File | null) {
     setFile(selected);
     setPreview(selected ? URL.createObjectURL(selected) : null);
+    setError(null);
   }
 
   async function uploadPhoto() {
     setError(null);
+    if (busy) return;
     if (!consent) return setError("Please confirm that you're using a real photo of yourself.");
     if (!file && !info?.photoUrl) return setError("Choose a photo of yourself to continue.");
     if (file) {
       setBusy(true);
-      const body = new FormData();
-      body.append("file", file);
-      body.append("consent", "true");
-      const response = await fetch("/api/profile/photo", { method: "POST", body });
-      const data = await response.json().catch(() => ({}));
+      setUploadPercent(null);
+      let prepared: File;
+      setPreparing(true);
+      try {
+        // Compresses oversized photos and converts HEIC before any upload starts.
+        prepared = await prepareImageForUpload(file);
+      } catch (err) {
+        setBusy(false);
+        // The chosen file stays selected so the user can pick another or retry.
+        return setError(err instanceof Error ? err.message : "We couldn't prepare that photo. Please choose a different one.");
+      } finally {
+        setPreparing(false);
+      }
+      const { promise } = uploadProfilePhoto(prepared, setUploadPercent);
+      const result = await promise;
       setBusy(false);
-      if (!response.ok) return setError(data.error ?? "Could not upload your photo.");
-      setInfo((current) => (current ? { ...current, photoUrl: data.photoUrl, consented: true, status: "NOT_VERIFIED" } : current));
+      setUploadPercent(null);
+      if (!result.ok) return setError(result.message);
+      setInfo((current) => (current ? { ...current, photoUrl: result.photoUrl, consented: true, status: "NOT_VERIFIED" } : current));
       setFile(null);
     }
     setStep("camera");
@@ -396,7 +412,7 @@ export function ProfileOnboarding() {
             )}
             <label className="cursor-pointer rounded-md border border-border px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">
               {preview || info.photoUrl ? "Change photo" : "Choose photo"}
-              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" className="sr-only" onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
             </label>
           </div>
           <label className="flex items-start gap-2 text-sm">
@@ -406,7 +422,7 @@ export function ProfileOnboarding() {
           {error && <p className="text-sm text-red-700">{error}</p>}
           <div className="flex gap-2">
             <button type="button" onClick={() => setStep("profile")} className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-slate-700">Back</button>
-            <button type="button" onClick={uploadPhoto} disabled={busy || !consent} className="flex-1 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50">{busy ? "Uploading..." : "Continue"}</button>
+            <button type="button" onClick={uploadPhoto} disabled={busy || !consent} className="flex-1 rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50">{busy ? (preparing ? "Preparing photo..." : uploadPercent === null ? "Uploading..." : `Uploading ${uploadPercent}%`) : "Continue"}</button>
           </div>
         </div>
       )}
