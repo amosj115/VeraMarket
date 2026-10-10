@@ -6,7 +6,8 @@ const NOTIFICATION_RETENTION_DAYS = 180;
 const SEARCH_RETENTION_DAYS = 7;
 
 // Scheduler-only: same CRON_SECRET bearer auth as /api/boosts/expire.
-export async function POST(request: NextRequest) {
+// GET is what Vercel Cron Jobs send (see vercel.json); POST is kept for external schedulers.
+async function handle(request: NextRequest) {
   const expected = process.env.CRON_SECRET;
   if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,4 +18,12 @@ export async function POST(request: NextRequest) {
     prisma.searchActivity.deleteMany({ where: { createdAt: { lt: new Date(now - SEARCH_RETENTION_DAYS * DAY) } } }),
   ]);
   return NextResponse.json({ notificationsDeleted: notifications.count, searchesDeleted: searches.count });
+}
+
+export async function GET(request: NextRequest) {
+  return handle(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handle(request);
 }

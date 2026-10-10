@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { activeListingBoosts } from "@/lib/boosts";
+import { createNotifications } from "@/lib/notifications";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 12;
@@ -177,4 +178,58 @@ export async function getTrendingPage(userId?: string, requestedOffset = 0) {
   }));
 
   return { items, hasMore: offset + page.length < ranked.length, nextOffset: offset + page.length };
+}
+
+const NOTIFY_COOLDOWN_MS = 7 * DAY;
+const SEARCH_LOOKBACK_MS = 30 * DAY;
+const TRENDING_LABELS = ["Trending now", "Rising fast"];
+
+// Trending notifications are automatic for every eligible (ACTIVE) user: there is no
+// opt-in. Runs from the scheduler-only /api/trending/notify endpoint, so generation
+// never depends on a user visiting the marketplace or clicking anything.
+//
+// Spam protection (two layers, both reusing existing mechanisms):
+//  1. one notification per user per 7 days (the cadence the old opt-in feature had);
+//  2. dedupeKey "trending:<listingId>" on the (userId, dedupeKey) unique index, so the
+//     same user can never receive a duplicate for the same trending listing even if the
+//     job runs twice concurrently (createMany skips duplicates).
+export async function notifyTrendingMatches() {
+  const page = await getTrendingPage();
+  const trendingItems = page.items.filter((item) => item.labels.some((label) => TRENDING_LABELS.includes(label)));
+  if (!trendingItems.length) return 0;
+
+  const userIds = (await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true } })).map((row) => row.id);
+  if (!userIds.length) return 0;
+
+  const [recentMatches, searches] = await Promise.all([
+    prisma.notification.findMany({ where: { type: "TRENDING_MATCH", userId: { in: userIds }, createdAt: { gte: new Date(Date.now() - NOTIFY_COOLDOWN_MS) } }, select: { userId: true } }),
+    prisma.searchActivity.findMany({ where: { userId: { in: userIds }, createdAt: { gte: new Date(Date.now() - SEARCH_LOOKBACK_MS) }, NOT: { query: { startsWith: "category:" } } }, take: 5000, select: { userId: true, query: true } }),
+  ]);
+  const onCooldown = new Set(recentMatches.map((row) => row.userId));
+  const queriesByUser = new Map<string, string[]>();
+  for (const row of searches) {
+    if (!row.userId) continue;
+    queriesByUser.set(row.userId, [...(queriesByUser.get(row.userId) ?? []), row.query]);
+  }
+
+  const top = trendingItems[0];
+  const rows = userIds.filter((userId) => !onCooldown.has(userId)).map((userId) => {
+    const queries = queriesByUser.get(userId) ?? [];
+    const matched = trendingItems.find((item) => queries.some((query) => queryMatches(query, item.title, item.category.name)));
+    const item = matched ?? top;
+    const query = matched ? queries.find((candidate) => queryMatches(candidate, matched.title, matched.category.name)) : undefined;
+    return {
+      userId,
+      type: "TRENDING_MATCH" as const,
+      title: "New listings are trending",
+      body: query
+        ? `"${item.title}" is trending and matches your recent search for "${query}".`
+        : `"${item.title}" is gaining attention on Vera Market right now.`,
+      link: "/trending",
+      dedupeKey: `trending:${item.id}`,
+      relatedListingId: item.id,
+    };
+  });
+
+  return createNotifications(rows);
 }

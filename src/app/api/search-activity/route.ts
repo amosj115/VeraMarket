@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getTrendingPage } from "@/lib/trending";
 
 const searchSchema = z.object({
   query: z.string().trim().max(100).optional().default(""),
@@ -35,35 +34,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (session?.user) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { trendingNotificationsEnabled: true },
-    });
-    if (user?.trendingNotificationsEnabled) {
-      const page = await getTrendingPage(session.user.id);
-      const matchingTrend = page.items.some((item) =>
-        item.labels.some((label) => label === "Trending now" || label === "Rising fast") &&
-        item.labels.some((label) => label.startsWith("Because you searched for "))
-      );
-      if (matchingTrend) {
-        const recentNotification = await prisma.notification.findFirst({
-          where: { userId: session.user.id, type: "TRENDING_MATCH", createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-          select: { id: true },
-        });
-        if (!recentNotification) {
-          await prisma.notification.create({
-            data: {
-              userId: session.user.id,
-              type: "TRENDING_MATCH",
-              title: "New listings are trending",
-              body: "Listings matching your interests are gaining attention.",
-              link: "/trending",
-            },
-          });
-        }
-      }
-    }
-  }
+  // Trending notifications are generated server-side on a schedule (see
+  // /api/trending/notify), not when a user happens to search or visit the marketplace.
   return NextResponse.json({ recorded: true });
 }
