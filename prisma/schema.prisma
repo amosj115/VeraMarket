@@ -375,6 +375,9 @@ model Listing {
   currency    String           @default("ZAR")
   condition   ListingCondition
   location    String
+  latitude    Float?
+  longitude   Float?
+  areaName    String?
   status      ListingStatus    @default(PENDING_REVIEW)
   viewCount   Int              @default(0)
   createdAt   DateTime         @default(now())
@@ -392,6 +395,7 @@ model Listing {
   @@index([categoryId, status])
   @@index([sellerId])
   @@index([status, createdAt])
+  @@index([latitude, longitude])
 }
 
 // ---------------------------------------------------------------------------

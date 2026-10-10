@@ -15,6 +15,9 @@ export const createListingSchema = z.object({
   categoryId: z.string().cuid(),
   condition: z.enum(listingConditions),
   location: z.string().trim().min(2).max(120),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  areaName: z.string().trim().max(120).optional(),
   imageUrls: z.array(z.string()).min(1, "Add at least one photo").max(10),
 });
 
