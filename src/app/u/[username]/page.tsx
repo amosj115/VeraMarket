@@ -59,7 +59,7 @@ export default async function PublicProfilePage({ params }: Props) {
       </div>
 
       <p className="mt-6 rounded-md bg-slate-50 p-3 text-xs text-slate-500">
-        {verified ? "Verified Person means this member appears to match their real profile photo. It is not a government ID check." : "This member hasn't completed profile verification. Take extra care and keep conversations and payments on Vera Market."}
+        {verified ? "Verified Person means this member appears to match their real profile photo. It is not a government ID check." : "This member hasn't completed profile verification. Take extra care, keep conversations on Vera Market, and arrange payment and collection directly with the other person when you meet."}
       </p>
 
       {user.shops.length > 0 && (

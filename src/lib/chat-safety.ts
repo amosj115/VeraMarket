@@ -15,4 +15,4 @@ export function paymentRisk(body: string) {
   return PAYMENT_RISK.test(body);
 }
 
-export const SAFETY_REMINDER = "Safety reminder: never send money outside Vera Market's protected payment system, and be wary of requests for deposits, courier fees or gift cards.";
+export const SAFETY_REMINDER = "Safety reminder: Vera Market does not process payments. Arrange payment directly with the other person when you meet, and be wary of requests for deposits, courier fees or gift cards.";

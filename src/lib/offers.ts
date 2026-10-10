@@ -79,7 +79,7 @@ export async function actOnOffer(params: { offerId: string; userId: string; acti
   if (params.action === "ACCEPT") {
     if (offer.listing.status !== "ACTIVE") return { ok: false, status: 409, error: "This listing is no longer available." };
     await prisma.offer.update({ where: { id: offer.id }, data: { status: "ACCEPTED", respondedAt: now } });
-    await note(`Offer of ${formatZAR(offer.amountCents)} was accepted. Arrange payment and handover inside Vera Market.`);
+    await note(`🎉 Offer accepted! The seller has accepted your offer of ${formatZAR(offer.amountCents)}. Contact the seller through Vera Market chat to arrange a safe meetup, inspect the item, and agree on payment and collection directly with the seller. Remember, Vera Market does not process payments or handle physical exchanges.`);
     return { ok: true, offerId: offer.id };
   }
   if (params.action === "DECLINE") {

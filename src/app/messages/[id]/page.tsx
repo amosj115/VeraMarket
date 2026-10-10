@@ -55,10 +55,16 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         )}
         <ChatActions conversationId={id} otherUserId={other.id} blockedByMe={block?.blockerId === me} archived={archived} />
       </div>
-      <div className="mt-4 rounded-md bg-amber-50 px-4 py-3 text-xs text-amber-900">
-        <p>⚠️ Never send money outside Vera Market&apos;s protected payment system.</p>
-        <p className="mt-1">🔒 Keep your conversation inside Vera Market whenever possible.</p>
-      </div>
+      <details className="mt-4 rounded-md border border-blue-100 bg-brand-light px-4 py-2.5 text-xs text-slate-700 open:pb-3">
+        <summary className="cursor-pointer select-none text-sm font-semibold text-brand">🛡️ Stay safe on Vera Market</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 leading-relaxed">
+          <li>Meet in a public, well-lit place.</li>
+          <li>Inspect the item before making payment.</li>
+          <li>Confirm payment directly with the seller or buyer when you meet.</li>
+          <li>Never share your banking PIN, password, or one-time verification codes.</li>
+          <li>Be cautious of payment screenshots or notifications that you cannot independently verify.</li>
+        </ul>
+      </details>
       <div className="my-6 min-h-80 space-y-3">
         {conversation.messages.map((message) => {
           const mine = message.senderId === me;
