@@ -15,7 +15,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
   return R * c;
 }
 
@@ -30,10 +30,14 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, Number(params.get("page") ?? "1"));
   const pageSize = 24;
 
-  // Distance filtering parameters
-  const buyerLat = params.get("lat") ? parseFloat(params.get("lat")!) : null;
-  const buyerLng = params.get("lng") ? parseFloat(params.get("lng")!) : null;
-  const radius = params.get("radius") ? parseInt(params.get("radius")!) : null;
+  // Distance filtering parameters. Malformed or out-of-range values are treated as
+  // "no location filter" so a bad parameter can never blank out the whole marketplace.
+  const rawLat = params.get("lat") ? parseFloat(params.get("lat")!) : null;
+  const rawLng = params.get("lng") ? parseFloat(params.get("lng")!) : null;
+  const rawRadius = params.get("radius") ? parseInt(params.get("radius")!, 10) : null;
+  const buyerLat = rawLat !== null && Number.isFinite(rawLat) && Math.abs(rawLat) <= 90 ? rawLat : null;
+  const buyerLng = rawLng !== null && Number.isFinite(rawLng) && Math.abs(rawLng) <= 180 ? rawLng : null;
+  const radius = rawRadius !== null && Number.isFinite(rawRadius) && rawRadius > 0 ? rawRadius : null;
   const sortByDistance = params.get("sort") === "distance";
 
   const where: Record<string, unknown> = { status: "ACTIVE" };
@@ -64,6 +68,16 @@ export async function GET(request: NextRequest) {
   // since Prisma doesn't support geospatial queries natively
   const needsDistanceFilter = buyerLat !== null && buyerLng !== null && radius !== null;
 
+  // A listing without coordinates has an unknown location (created before location
+  // support, or the seller never set one). Its distance cannot be computed, so it is
+  // not "outside the radius" — it stays in the results instead of being dropped.
+  const withinRadius = (listing: { latitude: number | null; longitude: number | null }): boolean => {
+    if (!needsDistanceFilter) return true;
+    if (listing.latitude == null || listing.longitude == null) return true;
+    const distance = haversineDistance(buyerLat!, buyerLng!, listing.latitude, listing.longitude);
+    return Number.isFinite(distance) && distance <= radius!;
+  };
+
   let listings = await prisma.listing.findMany({
     where,
     orderBy: { createdAt: "desc" },
@@ -79,18 +93,17 @@ export async function GET(request: NextRequest) {
 
   // Apply distance filtering in memory if needed
   if (needsDistanceFilter) {
-    listings = listings.filter((listing) => {
-      if (listing.latitude == null || listing.longitude == null) return false;
-      const distance = haversineDistance(buyerLat!, buyerLng!, listing.latitude, listing.longitude);
-      return distance <= radius!;
-    });
+    listings = listings.filter(withinRadius);
 
     if (sortByDistance) {
       listings.sort((a, b) => {
-        if (a.latitude == null || a.longitude == null) return 1;
-        if (b.latitude == null || b.longitude == null) return -1;
-        const distA = haversineDistance(buyerLat!, buyerLng!, a.latitude, a.longitude);
-        const distB = haversineDistance(buyerLat!, buyerLng!, b.latitude, b.longitude);
+        const aKnown = a.latitude != null && a.longitude != null;
+        const bKnown = b.latitude != null && b.longitude != null;
+        if (!aKnown && !bKnown) return 0;
+        if (!aKnown) return 1;
+        if (!bKnown) return -1;
+        const distA = haversineDistance(buyerLat!, buyerLng!, a.latitude!, a.longitude!);
+        const distB = haversineDistance(buyerLat!, buyerLng!, b.latitude!, b.longitude!);
         return distA - distB;
       });
     }
@@ -102,7 +115,7 @@ export async function GET(request: NextRequest) {
   const boosts = await activeListingBoosts();
   let ordered = listings;
   if (page === 1 && boosts.size) {
-    const boosted = await prisma.listing.findMany({ where: { ...where, id: { in: [...boosts.keys()] } }, take: 12, include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: { select: { name: true, slug: true } } } });
+    const boosted = (await prisma.listing.findMany({ where: { ...where, id: { in: [...boosts.keys()] } }, take: 12, include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: { select: { name: true, slug: true } } } })).filter(withinRadius);
     const merged = new Map([...boosted, ...listings].map((listing) => [listing.id, listing]));
     ordered = [...merged.values()].sort((a, b) => (boosts.get(b.id) ?? 0) - (boosts.get(a.id) ?? 0) || b.createdAt.getTime() - a.createdAt.getTime()).slice(0, pageSize);
   }
