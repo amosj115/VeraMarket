@@ -84,9 +84,12 @@ async function findSearchMatches({ text, location, excludeUserIds }: SearchMatch
   return matches;
 }
 
-function searchMatchCopy(title: string, match: { userLocation: string | null; local: boolean }, noun: string) {
-  if (match.local && match.userLocation) {
-    return { title: "New match for your recent search", body: `"${title}" was just listed near ${match.userLocation}.` };
+function searchMatchCopy(title: string, match: { userLocation: string | null; local: boolean }, noun: string, listedNear: string) {
+  // The "near" place must be the LISTING's own location (already verified to be in
+  // the same area as the searcher); using the searcher's location here would claim
+  // the item sits in the wrong place when the two spellings differ.
+  if (match.local && listedNear) {
+    return { title: "New match for your recent search", body: `"${title}" was just listed near ${listedNear}.` };
   }
   return { title: "New match for your recent search", body: `A new ${noun} matching your recent search was just listed: "${title}".` };
 }
@@ -123,7 +126,7 @@ async function notifyListing(id: string) {
   }));
   const matches = await findSearchMatches({ text: `${listing.title} ${listing.category.name}`, location: listing.location, excludeUserIds: [listing.sellerId, ...followers] });
   for (const [userId, match] of matches) {
-    rows.push({ userId, type: "SEARCH_MATCH", ...searchMatchCopy(listing.title, match, "listing"), link, imageUrl, dedupeKey, relatedListingId: listing.id, relatedSellerId: listing.sellerId, relatedSearchId: match.searchId });
+    rows.push({ userId, type: "SEARCH_MATCH", ...searchMatchCopy(listing.title, match, "listing", listing.location), link, imageUrl, dedupeKey, relatedListingId: listing.id, relatedSellerId: listing.sellerId, relatedSearchId: match.searchId });
   }
   const created = await createNotifications(rows);
   const { notifySavedSearchMatches } = await import("@/lib/saved-searches");
@@ -162,7 +165,7 @@ async function notifyProperty(id: string) {
   }));
   const matches = await findSearchMatches({ text: `${property.title} ${property.location}`, location: property.location, excludeUserIds: [property.ownerId, ...followers] });
   for (const [userId, match] of matches) {
-    rows.push({ userId, type: "REAL_ESTATE_UPDATE", ...searchMatchCopy(property.title, match, "property"), link, imageUrl, dedupeKey, relatedPropertyId: property.id, relatedSellerId: property.ownerId, relatedSearchId: match.searchId });
+    rows.push({ userId, type: "REAL_ESTATE_UPDATE", ...searchMatchCopy(property.title, match, "property", property.location), link, imageUrl, dedupeKey, relatedPropertyId: property.id, relatedSellerId: property.ownerId, relatedSearchId: match.searchId });
   }
   return createNotifications(rows);
 }
@@ -210,6 +213,27 @@ export async function safeNotify(task: () => Promise<unknown>) {
   } catch (error) {
     console.error("[notifications] fan-out failed", error);
   }
+}
+
+// Match notifications promise a listing that was "just listed"; once it leaves the
+// public catalogue (sold, removed, rejected) they must stop suggesting it is still
+// available. Follower/price/history rows for the same listing are kept, because
+// they describe events that really happened. relatedListingId has no foreign key,
+// so this must run at every transition out of ACTIVE.
+export async function dropListingMatchNotifications(listingId: string) {
+  return prisma.notification.deleteMany({
+    where: { relatedListingId: listingId, type: { in: ["SEARCH_MATCH", "SAVED_SEARCH_MATCH"] } },
+  });
+}
+
+// Property search matches share the REAL_ESTATE_UPDATE type with follower
+// history; only rows linked to a search (relatedSearchId set) promise a property
+// that was "just listed". Drop exactly those when the property leaves the
+// catalogue; follower rows describe a real past event and stay.
+export async function dropPropertyMatchNotifications(propertyId: string) {
+  return prisma.notification.deleteMany({
+    where: { relatedPropertyId: propertyId, relatedSearchId: { not: null } },
+  });
 }
 
 export function serializeNotification(n: { id: string; type: NotificationType; title: string; body: string; link: string | null; imageUrl: string | null; readAt: Date | null; createdAt: Date }) {

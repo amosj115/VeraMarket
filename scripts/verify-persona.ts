@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";

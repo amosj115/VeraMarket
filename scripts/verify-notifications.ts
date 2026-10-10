@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/security/password";
 import { createNotifications, notifyContentPublished } from "../src/lib/notifications";
@@ -59,6 +60,19 @@ async function makeUser(tag: string, location: string | null, role: "USER" | "AD
 async function cleanup() {
   const users = await prisma.user.findMany({ where: { email: { startsWith: `nc-test-${run}-` } }, select: { id: true } });
   const ids = users.map((u) => u.id);
+  // Fixture fan-outs can deliver to REAL users (any account with a matching recent
+  // search in the shared database). Remove every notification that references a
+  // fixture listing or fixture property, no matter the recipient, before the rows
+  // cascade away — otherwise production accounts keep orphaned test notifications.
+  const fixtureListings = await prisma.listing.findMany({ where: { sellerId: { in: ids } }, select: { id: true } });
+  if (fixtureListings.length) {
+    await prisma.notification.deleteMany({ where: { relatedListingId: { in: fixtureListings.map((l) => l.id) } } });
+  }
+  const fixtureProps = await prisma.propertyListing.findMany({ where: { ownerId: { in: ids } }, select: { id: true } });
+  if (fixtureProps.length) {
+    await prisma.notification.deleteMany({ where: { relatedPropertyId: { in: fixtureProps.map((p) => p.id) } } });
+  }
+  await prisma.notification.deleteMany({ where: { userId: { in: ids } } });
   await prisma.searchActivity.deleteMany({ where: { userId: { in: ids } } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
 }
@@ -119,12 +133,17 @@ async function main() {
   check("seller B gets only the approval notice, no follow/search alert for own listing", bItems.every((i) => i.type === "LISTING_APPROVED"), bItems);
   check("E (unrelated search) gets nothing", (await E.client.json("/api/notifications")).body.items.length === 0);
 
-  // Dedupe: re-running fan-out must not create more rows.
+  // Dedupe: re-running fan-out must not create more rows. The shared database can
+  // contain real accounts whose recent searches legitimately match this fixture
+  // listing, so the exact-row assertion is scoped to fixture users while the
+  // no-new-rows assertion covers every recipient.
+  const fixtureIds = [A.user.id, B.user.id, C.user.id, D.user.id, E.user.id, M.user.id];
   const before = await prisma.notification.count({ where: { relatedListingId: listing1.id } });
+  const fixtureBefore = await prisma.notification.count({ where: { relatedListingId: listing1.id, userId: { in: fixtureIds } } });
   await notifyContentPublished("LISTING", listing1.id);
   await notifyContentPublished("LISTING", listing1.id);
   const after = await prisma.notification.count({ where: { relatedListingId: listing1.id } });
-  check("re-running fan-out creates no duplicates", before === after && before === 2, { before, after });
+  check("re-running fan-out creates no duplicates", before === after && fixtureBefore === 2, { before, after, fixtureBefore });
   const dup = await createNotifications([{ userId: A.user.id, type: "SEARCH_MATCH", title: "x", body: "x", dedupeKey: `published:listing:${listing1.id}` }]);
   check("direct duplicate insert is ignored by the unique key", dup === 0, dup);
 
@@ -181,6 +200,82 @@ async function main() {
   const cAfter = await C.client.json("/api/notifications");
   const price = cAfter.body.items.filter((i: { type: string }) => i.type === "PRICE_CHANGE");
   check("C (saved the listing) gets one PRICE_CHANGE", price.length === 1 && price[0].link === `/listing/${listing1.slug}`, cAfter.body.items);
+
+  // ---- Fake/stale match notification regressions ----
+
+  // Pending-review listings can never produce match notifications.
+  const pend = await B.client.json("/api/listings", {
+    method: "POST",
+    body: JSON.stringify({ title: "iPhone 14 Pending Fixture", description: "Pending fixture item.", priceRand: 100, categoryId: category.id, condition: "GOOD", location: "Pretoria West", imageUrls: ["/uploads/nc-test.jpg"] }),
+  });
+  check("pending fixture created", pend.status === 201, pend.body);
+  const pendId = pend.body.listing.id as string;
+  check("pending listing yields no match notifications", (await notifyContentPublished("LISTING", pendId)) === 0 && (await prisma.notification.count({ where: { relatedListingId: pendId } })) === 0);
+
+  // Rejected listings can never produce match notifications.
+  await M.client.json("/api/admin/moderation", { method: "PATCH", body: JSON.stringify({ targetType: "LISTING", targetId: pendId, decision: "REJECT" }) });
+  check("rejected listing yields no match notifications", (await notifyContentPublished("LISTING", pendId)) === 0 && (await prisma.notification.count({ where: { relatedListingId: pendId } })) === 0);
+
+  // A genuine approved listing that matches a search notifies the right user with
+  // an exact reference to the real listing, search and link.
+  const live = await B.client.json("/api/listings", {
+    method: "POST",
+    body: JSON.stringify({ title: "iPhone 14 Live Fixture", description: "Live fixture item.", priceRand: 200, categoryId: category.id, condition: "GOOD", location: "Pretoria East", imageUrls: ["/uploads/nc-test.jpg"] }),
+  });
+  check("live fixture created", live.status === 201, live.body);
+  const liveId = live.body.listing.id as string;
+  const liveSlug = live.body.listing.slug as string;
+  const approveLive = await M.client.json("/api/admin/moderation", { method: "PATCH", body: JSON.stringify({ targetType: "LISTING", targetId: liveId, decision: "APPROVE" }) });
+  check("live fixture approved", approveLive.status === 200, approveLive.body);
+  const liveRow = await prisma.notification.findFirst({ where: { userId: C.user.id, relatedListingId: liveId, type: "SEARCH_MATCH" } });
+  check("match notification exists for the searching user", Boolean(liveRow), liveRow);
+  check("match references the real listing, search and link", liveRow?.link === `/listing/${liveSlug}` && liveRow?.relatedSearchId !== null && (liveRow?.body ?? "").includes("iPhone 14 Live Fixture"), liveRow);
+  check("no demo/placeholder copy in match body", !/demo|sample|placeholder|lorem/i.test(liveRow?.body ?? ""), liveRow?.body);
+
+  // Unrelated users must not receive it.
+  check("unrelated user D gets no row for this listing", (await prisma.notification.count({ where: { userId: D.user.id, relatedListingId: liveId } })) === 0);
+  check("unrelated user E gets no row for this listing", (await prisma.notification.count({ where: { userId: E.user.id, relatedListingId: liveId } })) === 0);
+  check("seller gets no search-match for own listing", (await prisma.notification.count({ where: { userId: B.user.id, relatedListingId: liveId, type: "SEARCH_MATCH" } })) === 0);
+
+  // Removing the listing drops the "just listed" promises but keeps event history.
+  const removed = await B.client.json(`/api/listings/${liveId}`, { method: "DELETE" });
+  check("listing removed", removed.status === 200 && removed.body.removed === true, removed.body);
+  check("removal drops search-match rows", (await prisma.notification.count({ where: { relatedListingId: liveId, type: "SEARCH_MATCH" } })) === 0);
+  check("follower history row is preserved", (await prisma.notification.count({ where: { relatedListingId: liveId, type: "FOLLOWED_SELLER_LISTING" } })) === 1);
+  check("fan-out after removal creates nothing", (await notifyContentPublished("LISTING", liveId)) === 0);
+
+  // Hard-deleted listings yield nothing either.
+  await prisma.listing.delete({ where: { id: liveId } });
+  check("deleted listing yields no notifications", (await notifyContentPublished("LISTING", liveId)) === 0);
+
+  // Feeds never contain demo/hardcoded sample content.
+  const feedC = await C.client.json("/api/notifications");
+  const feedA = await A.client.json("/api/notifications");
+  const allFeedItems = [...feedC.body.items, ...feedA.body.items] as { title: string; body: string }[];
+  check("no demo/sample/placeholder content in feeds", allFeedItems.length > 0 && allFeedItems.every((i) => !/demo|sample|placeholder|lorem/i.test(`${i.title} ${i.body}`)), allFeedItems);
+
+  // ---- Property removal drops "just listed" matches but keeps follower history ----
+  const propSearch = await C.client.json("/api/search-activity", { method: "POST", body: JSON.stringify({ query: "penthouse loft" }) });
+  check("property search recorded", propSearch.status === 200 && propSearch.body.recorded === true, propSearch.body);
+  const propCreated = await B.client.json("/api/properties", {
+    method: "POST",
+    body: JSON.stringify({ title: "Penthouse Loft Seminary", description: "Spacious loft with a view.", listingType: "FOR_SALE", propertyType: "APARTMENT", priceRand: 2500000, location: "Pretoria East" }),
+  });
+  check("property fixture created", propCreated.status === 201, propCreated.body);
+  const propId = propCreated.body.property.id as string;
+  const propSlug = propCreated.body.property.slug as string;
+  check("pending property yields no match notifications", (await notifyContentPublished("PROPERTY", propId)) === 0 && (await prisma.notification.count({ where: { relatedPropertyId: propId } })) === 0);
+  const approveProp = await M.client.json("/api/admin/moderation", { method: "PATCH", body: JSON.stringify({ targetType: "PROPERTY", targetId: propId, decision: "APPROVE" }) });
+  check("property approved", approveProp.status === 200, approveProp.body);
+  const propMatch = await prisma.notification.findFirst({ where: { userId: C.user.id, relatedPropertyId: propId, relatedSearchId: { not: null } } });
+  check("property search-match delivered with real link", Boolean(propMatch) && propMatch?.link === `/real-estate/${propSlug}` && (propMatch?.body ?? "").includes("Penthouse Loft Seminary"), propMatch);
+  check("unrelated user E gets no property match", (await prisma.notification.count({ where: { userId: E.user.id, relatedPropertyId: propId } })) === 0);
+
+  const propRemoved = await B.client.json(`/api/properties/${propId}`, { method: "DELETE" });
+  check("property removed", propRemoved.status === 200 && propRemoved.body.removed === true, propRemoved.body);
+  check("property removal drops search-match rows", (await prisma.notification.count({ where: { relatedPropertyId: propId, relatedSearchId: { not: null } } })) === 0);
+  check("property follower history row is preserved", (await prisma.notification.count({ where: { userId: A.user.id, relatedPropertyId: propId, relatedSearchId: null } })) === 1);
+  check("fan-out after property removal creates nothing", (await notifyContentPublished("PROPERTY", propId)) === 0);
 }
 
 main()

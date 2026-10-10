@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import { spawn, type ChildProcess } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { channelHref, defaultShareMessage, publicPath, sharedUrl } from "@/lib/share";

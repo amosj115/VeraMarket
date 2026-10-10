@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import http from "node:http";
 import { rm } from "node:fs/promises";
 import path from "node:path";

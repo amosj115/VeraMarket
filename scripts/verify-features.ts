@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import { prisma } from "@/lib/prisma";
 import { createOffer, actOnOffer, expireStaleOffers } from "@/lib/offers";
 import { notifyWishlistStatus } from "@/lib/notifications";
@@ -98,6 +99,11 @@ async function main() {
   check("pending/expired boosts do not rank", !map.has(bike.id));
 
   // Cleanup
+  // Fixture fan-outs (saved-search, wishlist) can deliver to REAL accounts in the
+  // shared database; remove every notification referencing a fixture listing first,
+  // no matter the recipient, before the listings cascade away with their sellers.
+  const fixtureListingIds = (await prisma.listing.findMany({ where: { sellerId: { in: [seller.id, buyer.id, other.id] } }, select: { id: true } })).map((l) => l.id);
+  if (fixtureListingIds.length) await prisma.notification.deleteMany({ where: { relatedListingId: { in: fixtureListingIds } } });
   await prisma.user.deleteMany({ where: { id: { in: [seller.id, buyer.id, other.id] } } });
 }
 

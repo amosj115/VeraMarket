@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./db-guard";
 import { createHmac } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/security/password";
