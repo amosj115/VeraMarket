@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/security/password";
@@ -77,12 +77,12 @@ const nextAuth = NextAuth({
           session.user.username = token.username as string;
           session.user.role = token.role as string;
         }
-      } else {
-        // Tombstoned token: ensure the session user is completely removed
-        // so /api/auth/session reflects the unauthenticated state.
-        delete (session as any).user;
-      }
-      return session;
+        } else {
+          // Tombstoned token: ensure the session user is completely removed
+          // so /api/auth/session reflects the unauthenticated state.
+          delete (session as Partial<Session>).user;
+        }
+        return session;
     },
   },
 });

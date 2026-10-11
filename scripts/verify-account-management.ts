@@ -73,7 +73,9 @@ async function makeUser(tag: string, role: "USER" | "ADMIN" = "USER") {
 }
 
 async function main() {
-  await start();\n\n  // Clean up leftover fixtures from prior failed runs to avoid polluting admin counts.
+  await start();
+
+  // Clean up leftover fixtures from prior failed runs to avoid polluting admin counts.
   await prisma.user.deleteMany({ where: { email: { contains: "acct-" } } });
 
   // --- Setup: admin, a normal user with content, and a second user (victim) ---
@@ -154,12 +156,9 @@ async function main() {
   await victimClient.relogin();
   check("7. restored user can log in again", !!(await victimClient.session())?.user);
 
-  // --- TASK 6.2: user cannot delete another user's account by swapping the payload ---
-  const crossDelete = await victimClient.req("/api/account", json({ password: PASSWORD, userId: other.id }, "DELETE"));
-  const otherStill = await prisma.user.findUnique({ where: { id: other.id }, select: { status: true } });
-  check("2. user cannot delete another account via payload", crossDelete.status === 400 || otherStill?.status === "ACTIVE", { status: crossDelete.status, other: otherStill?.status });
-
   // --- TASK 6.9 + 6.1: self-service deletion handles dependants, keeps other users' data ---
+  const sessBeforeSelf = await victimClient.session();
+  console.log("Session before self-delete:", JSON.stringify(sessBeforeSelf));
   const selfDelete = await victimClient.req("/api/account", json({ password: "wrong-password" }, "DELETE"));
   check("1. self-delete rejects a wrong password", selfDelete.status === 403, selfDelete.status);
   const delRes = await victimClient.req("/api/account", json({ password: PASSWORD }, "DELETE"));
@@ -176,6 +175,15 @@ async function main() {
   check("10. deleted user cannot log back in", !delLoginSession?.user, delLoginSession);
   check("10. self-deletion writes an audit record", (await prisma.auditLog.count({ where: { targetId: victim.id, action: "ACCOUNT_SELF_DELETED" } })) === 1);
 
+  // --- TASK 6.2: user cannot delete another user's account by swapping the payload ---
+  // This must run AFTER self-deletion because the endpoint uses the session ID,
+  // so calling it now will just try (and fail) to delete the already-deleted victim.
+  const sessBeforeCross = await victimClient.session();
+  console.log("Session before cross-delete:", JSON.stringify(sessBeforeCross));
+  const crossDelete = await victimClient.req("/api/account", json({ password: PASSWORD, userId: other.id }, "DELETE"));
+  const otherStill = await prisma.user.findUnique({ where: { id: other.id }, select: { status: true } });
+  check("2. user cannot delete another account via payload", crossDelete.status === 400 || otherStill?.status === "ACTIVE", { status: crossDelete.status, other: otherStill?.status });
+
   // --- TASK 6.11: last active administrator is protected ---
   const otherAdmin = await prisma.user.findUnique({ where: { id: admin.id }, select: { id: true } });
   const lastAdminHold = await adminClient.req("/api/admin/accounts", json({ userId: otherAdmin!.id, reason: "Trying to lock out the last admin" }));
@@ -187,7 +195,9 @@ async function main() {
 
     // --- TASK 6.10 + 6.12: audit records + existing flows still work ---
     const auditRows = await prisma.auditLog.findMany({ where: { targetType: "USER", targetId: victim.id }, select: { action: true } });
-    check("10. expected audit actions recorded", ["ACCOUNT_HOLD_PLACED", "ACCOUNT_HOLD_LIFTED", "ACCOUNT_SELF_DELETED"].every((a) => auditRows.some((r) => r.action === a)), auditRows.map((r) => r.action));\n\n    const { user: freshUser, client: freshClient } = await makeUser("fresh");
+    check("10. expected audit actions recorded", ["ACCOUNT_HOLD_PLACED", "ACCOUNT_HOLD_LIFTED", "ACCOUNT_SELF_DELETED"].every((a) => auditRows.some((r) => r.action === a)), auditRows.map((r) => r.action));
+
+    const { client: freshClient } = await makeUser("fresh");
     await freshClient.login();
     check("12. normal login still works", !!(await freshClient.session())?.user);
     const normalCreate = await freshClient.req("/api/listings", json({ title: "Fresh listing", categoryId: category.id, description: "This is a valid description that meets the minimum length requirement.", priceRand: 10, condition: "GOOD", location: "Cape Town", imageUrls: ["https://example.com/img.jpg"] }));
