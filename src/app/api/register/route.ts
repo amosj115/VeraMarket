@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/security/password";
-import { registerSchema } from "@/lib/validation/auth";
+import { registerErrorMessage, registerSchema } from "@/lib/validation/auth";
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 5;
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { error: registerErrorMessage(parsed.error) },
       { status: 400 }
     );
   }

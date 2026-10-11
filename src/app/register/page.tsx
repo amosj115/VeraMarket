@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { REGISTER_LIMITS } from "@/lib/validation/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -85,6 +86,7 @@ export default function RegisterPage() {
           onChange={(v) => setForm((f) => ({ ...f, displayName: v }))}
           autoComplete="name"
           required
+          maxLength={REGISTER_LIMITS.displayName}
         />
         <Field
           label="Username"
@@ -94,6 +96,9 @@ export default function RegisterPage() {
           }
           autoComplete="username"
           required
+          minLength={REGISTER_LIMITS.usernameMin}
+          maxLength={REGISTER_LIMITS.username}
+          hint="3–30 characters: lowercase letters, numbers and underscores."
         />
         <Field
           label="Email"
@@ -102,6 +107,7 @@ export default function RegisterPage() {
           onChange={(v) => setForm((f) => ({ ...f, email: v }))}
           autoComplete="email"
           required
+          maxLength={REGISTER_LIMITS.email}
         />
         <Field
           label="Password"
@@ -110,6 +116,9 @@ export default function RegisterPage() {
           onChange={(v) => setForm((f) => ({ ...f, password: v }))}
           autoComplete="new-password"
           required
+          minLength={REGISTER_LIMITS.passwordMin}
+          maxLength={REGISTER_LIMITS.passwordBytes}
+          hint="At least 8 characters, with an uppercase letter, a lowercase letter and a number."
         />
 
         {error && (
@@ -144,6 +153,9 @@ function Field({
   type = "text",
   autoComplete,
   required,
+  maxLength,
+  minLength,
+  hint,
 }: {
   label: string;
   value: string;
@@ -151,6 +163,9 @@ function Field({
   type?: string;
   autoComplete?: string;
   required?: boolean;
+  maxLength?: number;
+  minLength?: number;
+  hint?: string;
 }) {
   return (
     <label className="block">
@@ -160,9 +175,12 @@ function Field({
         value={value}
         required={required}
         autoComplete={autoComplete}
+        maxLength={maxLength}
+        minLength={minLength}
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm text-foreground shadow-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
       />
+      {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
     </label>
   );
 }
