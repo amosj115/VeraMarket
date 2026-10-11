@@ -7,6 +7,7 @@ import { formatZAR } from "@/lib/utils";
 import { cdnImage } from "@/lib/image-url";
 import { SaveSearchButton } from "@/components/searches/save-search-button";
 import { SearchActivityRecorder } from "@/components/trending/search-activity-recorder";
+import { Greeting } from "@/components/home/greeting";
 
 const RADIUS_OPTIONS = [10, 20, 50, 60, 70, 100];
 
@@ -68,6 +69,7 @@ export function MarketplaceClient({
   const [categories] = useState(initialCategories);
   const [listings, setListings] = useState<ListingCard[]>(initialListings ?? []);
   const [loading, setLoading] = useState(initialListings === undefined);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   // The server already rendered results for the initial URL — skip the mount fetch
   // that used to duplicate it (filter changes still refetch below).
   const skipNextFetch = useRef(initialListings !== undefined);
@@ -141,15 +143,26 @@ export function MarketplaceClient({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-      {/* Compact header: title + primary action on one line */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Marketplace</h1>
-        <Link
-          href="/sell"
-          className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
-        >
-          Sell something
-        </Link>
+      <div className="mb-6 space-y-4">
+        <Greeting />
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Marketplace</h1>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => searchInputRef.current?.focus()}
+              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+            >
+              Search
+            </button>
+            <Link
+              href="/sell"
+              className="rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+            >
+              Sell something
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Search + primary filters */}
@@ -161,6 +174,7 @@ export function MarketplaceClient({
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            ref={searchInputRef}
             name="q"
             type="search"
             defaultValue={query}

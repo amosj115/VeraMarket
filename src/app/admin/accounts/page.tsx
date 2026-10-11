@@ -51,11 +51,11 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
             return (
               <div key={user.id} className="rounded-lg border border-border bg-white p-5">
                 <div className="flex flex-col justify-between gap-4 sm:flex-row">
-                  <div className="min-w-0">
-                    <p className="font-semibold">@{user.username} <span className="font-normal text-slate-500">· {user.displayName}</span></p>
-                    <p className="mt-1 truncate text-sm text-slate-600">{user.email}</p>
-                    <p className="mt-2 text-xs text-slate-400">{user.role} · {user.status.replaceAll("_", " ")} · {user._count.listings} listings · {user._count.shops} shops · joined {user.createdAt.toLocaleDateString("en-ZA", { month: "short", year: "numeric" })}</p>
-                    {hold && (
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{user.displayName}</p>
+                        <p className="mt-0.5 truncate text-sm text-slate-500">@{user.username} · {user.email}</p>
+                        <p className="mt-2 text-xs text-slate-400">{user.role} · {user.status.replaceAll("_", " ")} · {user._count.listings} listings · {user._count.shops} shops · joined {user.createdAt.toLocaleDateString("en-ZA", { month: "short", year: "numeric" })}</p>
+                        {hold && (
                       <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         <p className="font-medium">On hold</p>
                         <p className="mt-1">{hold.reason}</p>

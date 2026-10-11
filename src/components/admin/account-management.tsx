@@ -59,10 +59,10 @@ export function AccountManagement({ user, selfId }: { user: Target; selfId: stri
       {user.activeHold ? (
         <button disabled={busy || isSelf} onClick={() => { if (window.confirm(`Lift the hold on @${user.username}? Their account and hidden listings will be restored.`)) void run("lift", { userId: user.id }); }} className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-60">{busy ? "Working..." : "Lift hold"}</button>
       ) : (
-        <>
-          <button disabled={busy || isSelf} onClick={() => setMode("hold")} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:border-brand disabled:opacity-60">Place on hold</button>
-          <button disabled={busy || isSelf} onClick={() => setMode("delete")} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:border-red-400 hover:bg-red-50 disabled:opacity-60">Delete account</button>
-        </>
+        <div className="flex items-center gap-2">
+          <button disabled={busy || isSelf} onClick={() => setMode("hold")} className="flex-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:border-brand disabled:opacity-60">Place on hold</button>
+          <button disabled={busy || isSelf} onClick={() => setMode("delete")} className="flex-1 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:border-red-400 hover:bg-red-50 disabled:opacity-60">Delete account</button>
+        </div>
       )}
     </div>
   );
