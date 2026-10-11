@@ -15,15 +15,17 @@ export const dynamic = "force-dynamic";
 const firstImage = { take: 1, orderBy: { sortOrder: "asc" as const }, select: { url: true } };
 
 async function getHomeCovers() {
-  const [listing, shop, service, property] = await Promise.all([
-    prisma.listing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
+  const [shop, service, property] = await Promise.all([
     prisma.shop.findFirst({ where: { ...activeShopFilter(), images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
     prisma.serviceListing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
     prisma.propertyListing.findFirst({ where: { status: "ACTIVE", images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
   ]);
 
   return {
-    marketplace: listing?.images[0]?.url,
+    // Marketplace no longer borrows a product listing image as its cover;
+    // a dedicated cover will be configured later. Until then the card keeps
+    // its neutral gradient background.
+    marketplace: undefined,
     shops: shop?.images[0]?.url,
     services: service?.images[0]?.url,
     property: property?.images[0]?.url,
@@ -104,7 +106,6 @@ function CategoryCardGrid({
         subtitle="Buy and sell products"
         href="/marketplace"
         image={covers?.marketplace}
-        preload
       />
       <CategoryCard
         title="Virtual Shop"

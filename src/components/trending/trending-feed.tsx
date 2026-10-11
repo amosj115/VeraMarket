@@ -55,7 +55,7 @@ export function TrendingFeed({ initialPage }: { initialPage: FeedPage }) {
     return <div className="mt-8 border-y border-border py-14 text-center"><p className="font-semibold">No active listings yet</p><p className="mt-1 text-sm text-slate-500">New and popular listings will appear here as Vera Market grows.</p><Link href="/marketplace" className="mt-4 inline-block text-sm font-semibold text-brand">Browse the marketplace</Link></div>;
   }
 
-  return <div className="mt-8 space-y-6">{items.map((item) => <TrendingCard key={item.id} item={item} />)}<div ref={sentinel} className="py-4 text-center" aria-live="polite">{error ? <button onClick={() => { setError(""); setRetryCount((count) => count + 1); }} className="text-sm font-medium text-brand">{error}</button> : hasMore ? <span className="text-sm text-slate-500">{isLoading ? "Loading more listings..." : "Scroll to load more listings"}</span> : <span className="text-sm text-slate-500">You are up to date.</span>}</div></div>;
+  return <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{items.map((item) => <TrendingCard key={item.id} item={item} />)}<div ref={sentinel} className="col-span-full py-4 text-center" aria-live="polite">{error ? <button onClick={() => { setError(""); setRetryCount((count) => count + 1); }} className="text-sm font-medium text-brand">{error}</button> : hasMore ? <span className="text-sm text-slate-500">{isLoading ? "Loading more listings..." : "Scroll to load more listings"}</span> : <span className="text-sm text-slate-500">You are up to date.</span>}</div></div>;
 }
 
 function TrendingCard({ item }: { item: TrendingItem }) {
@@ -123,30 +123,28 @@ function TrendingCard({ item }: { item: TrendingItem }) {
     }
   }
 
-  return <article ref={card} className="grid overflow-hidden rounded-lg border border-border bg-white md:grid-cols-[1.15fr_0.85fr]">
-    <Link href={`/listing/${item.slug}`} className="relative block aspect-[4/3] bg-slate-100 md:aspect-auto md:min-h-[22rem]" aria-label={`View ${item.title}`}>
-      {item.images[0] ? <Image src={cdnImage(item.images[0].url, 960)} alt={item.title} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-slate-400">No image</div>}
-      {item.labels.length > 0 && <div className="absolute left-3 top-3 flex flex-wrap gap-2">{item.labels.map((label) => <span key={label} className="rounded-sm bg-white/95 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm">{label}</span>)}</div>}
-    </Link>
-    <div className="flex flex-col p-4 sm:p-6">
-      <p className="text-xs font-semibold uppercase text-brand">{item.category.name}</p>
-      <Link href={`/listing/${item.slug}`} className="mt-2 text-xl font-semibold leading-snug text-foreground hover:text-brand">{item.title}</Link>
-      <p className="mt-3 text-2xl font-semibold text-brand">{formatZAR(item.priceCents)}</p>
-      <p className="mt-2 text-sm text-slate-500">{item.location}</p>
-      <div className="mt-5 border-t border-border pt-4">
-        <p className="text-xs text-slate-500">Seller</p>
-        <p className="mt-1 text-sm font-semibold">{item.seller.displayName} <span className="font-normal text-slate-500">@{item.seller.username}</span></p>
-        {item.seller.identityVerification === "VERIFIED" && <p className="mt-1 text-xs font-medium text-emerald-700">Identity verified</p>}
-      </div>
-      <div className="mt-auto pt-5">
-        <div className="flex flex-wrap gap-2 border-y border-border py-3">
-          <button type="button" disabled={busy} onClick={toggleLike} aria-pressed={liked} className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:border-brand hover:text-brand disabled:opacity-60">{liked ? "Liked" : "Like"} · {likeCount}</button>
-          <button type="button" disabled={busy} onClick={toggleSave} aria-pressed={saved} className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:border-brand hover:text-brand disabled:opacity-60">{saved ? "Saved" : "Save"} · {saveCount}</button>
-          <button type="button" onClick={share} title="Share listing" className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:border-brand hover:text-brand">Share</button>
+  return (
+    <article ref={card} className="group relative flex flex-col overflow-hidden rounded-lg border border-border bg-white transition hover:shadow-md">
+      <Link href={`/listing/${item.slug}`} className="relative block aspect-square bg-slate-100" aria-label={`View ${item.title}`}>
+        {item.images[0] ? <Image src={cdnImage(item.images[0].url, 640)} alt={item.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}
+        {item.labels.length > 0 && <div className="absolute left-1.5 top-1.5 flex max-w-[calc(100%-0.75rem)] flex-col items-start gap-1">{item.labels.map((label) => <span key={label} className="truncate rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">{label}</span>)}</div>}
+      </Link>
+      <div className="flex flex-1 flex-col p-2.5">
+        <p className="truncate text-[11px] font-semibold uppercase text-brand">{item.category.name}</p>
+        <Link href={`/listing/${item.slug}`} className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-foreground hover:text-brand">{item.title}</Link>
+        <p className="mt-1 text-sm font-semibold text-brand">{formatZAR(item.priceCents)}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{item.location}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{item.seller.displayName}
+          {item.seller.identityVerification === "VERIFIED" && <span className="ml-1 font-medium text-emerald-700">✓ Verified</span>}
+        </p>
+        <div className="mt-auto flex flex-wrap gap-1 pt-2">
+          <button type="button" disabled={busy} onClick={toggleLike} aria-pressed={liked} aria-label={liked ? "Unlike listing" : "Like listing"} className="flex-1 rounded-md border border-border px-1.5 py-1 text-[11px] font-medium hover:border-brand hover:text-brand disabled:opacity-60">{liked ? "Liked" : "Like"} · {likeCount}</button>
+          <button type="button" disabled={busy} onClick={toggleSave} aria-pressed={saved} aria-label={saved ? "Remove from saved" : "Save listing"} className="flex-1 rounded-md border border-border px-1.5 py-1 text-[11px] font-medium hover:border-brand hover:text-brand disabled:opacity-60">{saved ? "Saved" : "Save"} · {saveCount}</button>
+          <button type="button" onClick={share} title="Share listing" aria-label="Share listing" className="rounded-md border border-border px-1.5 py-1 text-[11px] font-medium hover:border-brand hover:text-brand">Share</button>
         </div>
-        <Link href={`/listing/${item.slug}#message-box`} onClick={() => { void fetch(`/api/listings/${item.id}/engagement`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "CONTACT" }), keepalive: true }); }} className="mt-3 block rounded-md bg-brand px-4 py-3 text-center text-sm font-semibold text-white hover:bg-brand-dark">Contact seller</Link>
-        {status && <p className="mt-2 text-xs text-slate-500" role="status">{status}</p>}
+        <Link href={`/listing/${item.slug}#message-box`} onClick={() => { void fetch(`/api/listings/${item.id}/engagement`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "CONTACT" }), keepalive: true }); }} className="mt-1.5 block rounded-md bg-brand px-2 py-1.5 text-center text-[11px] font-semibold text-white hover:bg-brand-dark">Contact seller</Link>
+        {status && <p className="mt-1 text-[11px] text-slate-500" role="status">{status}</p>}
       </div>
-    </div>
-  </article>;
+    </article>
+  );
 }
