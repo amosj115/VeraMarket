@@ -44,7 +44,11 @@
     ".next-persona-3311/types/**/*.ts",
     ".next-persona-3311/dev/types/**/*.ts",
     ".next-persona-3320/types/**/*.ts",
-    ".next-persona-3320/dev/types/**/*.ts"
+    ".next-persona-3320/dev/types/**/*.ts",
+    ".next-persona-review/types/**/*.ts",
+    ".next-persona-review/dev/types/**/*.ts",
+    ".next-persona-3333/types/**/*.ts",
+    ".next-persona-3333/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

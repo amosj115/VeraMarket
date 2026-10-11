@@ -14,7 +14,8 @@
     "test:e2e": "tsx scripts/test-e2e.ts",
     "test:features": "tsx scripts/verify-features.ts",
     "test:persona": "tsx scripts/verify-persona.ts",
-    "test:share": "tsx scripts/verify-share.ts"
+    "test:share": "tsx scripts/verify-share.ts",
+    "test:accounts": "tsx scripts/verify-account-management.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

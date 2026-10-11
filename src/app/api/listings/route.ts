@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user) {
+  // A held or deleted account's token is tombstoned (id stripped) by the `jwt` callback,
+  // so `session.user.id` is undefined here. Guard it before any lookup, since passing
+  // undefined into the profile gate would throw.
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

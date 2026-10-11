@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const session = await auth();
   if (!session?.user) redirect("/login?callbackUrl=/profile");
 
@@ -20,6 +21,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+      {deleted === "1" && <p role="status" className="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Your account has been deleted. Some records are retained for security and legal reasons.</p>}
       <div className="flex flex-col justify-between gap-5 border-b border-border pb-8 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-medium text-brand">Your profile</p>

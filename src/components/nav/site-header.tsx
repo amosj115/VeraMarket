@@ -57,7 +57,7 @@ export function SiteHeader() {
                 Messages
               </Link>
               <NotificationBell />
-              {session.user?.role !== "USER" && <><Link href="/admin/moderation" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Admin</Link><Link href="/admin/config" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Config</Link><Link href="/admin/trending" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Analytics</Link></>}
+              {session.user?.role !== "USER" && <><Link href="/admin/moderation" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Admin</Link>{session.user?.role === "ADMIN" && <Link href="/admin/accounts" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Accounts</Link>}<Link href="/admin/config" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Config</Link><Link href="/admin/trending" className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-brand-light hover:text-brand">Analytics</Link></>}
               <Link
                 href="/sell"
                 className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark"
@@ -154,7 +154,7 @@ export function SiteHeader() {
                 >
                   Messages
                 </Link>
-                {session.user?.role !== "USER" && <><Link href="/admin/moderation" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light">Admin moderation</Link><Link href="/admin/trending" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light">Trending analytics</Link></>}
+                {session.user?.role !== "USER" && <><Link href="/admin/moderation" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light">Admin moderation</Link>{session.user?.role === "ADMIN" && <Link href="/admin/accounts" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light">Account management</Link>}<Link href="/admin/trending" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light">Trending analytics</Link></>}
                 <Link
                   href="/profile"
                   className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-brand-light"

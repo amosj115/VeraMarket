@@ -269,9 +269,41 @@ model User {
   contactViolations        ContactViolation[]
   achievements             UserAchievement[]
   proSubscriptions         ProSubscription[]
+  accountHolds             AccountHold[]        @relation("AccountHoldSubject")
+  accountHoldsPlaced       AccountHold[]        @relation("AccountHoldPlacer")
+  accountHoldsLifted       AccountHold[]        @relation("AccountHoldLifter")
 
   @@index([role])
   @@index([status])
+}
+
+// An administrative hold placed on an account. Holds are additive and reversible:
+// `active` marks the current hold, while every row is retained as an audit trail
+// of who placed/lifted each hold and why. The user's `status` is set to SUSPENDED
+// while a hold is active so login and existing JWT sessions are rejected.
+model AccountHold {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation("AccountHoldSubject", fields: [userId], references: [id], onDelete: Cascade)
+  reason     String
+  placedById String
+  placedBy   User      @relation("AccountHoldPlacer", fields: [placedById], references: [id], onDelete: Cascade)
+  placedAt   DateTime  @default(now())
+  liftedById String?
+  liftedBy   User?     @relation("AccountHoldLifter", fields: [liftedById], references: [id], onDelete: SetNull)
+  liftedAt   DateTime?
+  active     Boolean   @default(true)
+
+  // Ids of content that this hold automatically restricted (ACTIVE -> REMOVED), so a
+  // lift can restore exactly those rows and never touch independently moderated ones.
+  heldListingIds   Json?
+  heldShopIds      Json?
+  heldServiceIds   Json?
+  heldPropertyIds  Json?
+
+  @@index([userId, active])
+  @@index([active])
+  @@index([placedAt])
 }
 
 model Session {
