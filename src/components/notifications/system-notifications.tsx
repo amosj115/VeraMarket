@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NOTIFICATIONS_CHANGED, NotificationItem, announceNotificationsChanged, type NotificationDto } from "./notification-item";
 
@@ -99,7 +100,7 @@ export function SystemNotificationCenter() {
   return (
     <div className="mx-auto max-w-2xl px-0 pb-10 sm:px-6 sm:pt-8">
       <div className="px-4 pt-5 sm:px-0 sm:pt-0">
-        <a href="/notifications" className="text-sm font-medium text-brand">&larr; All notifications</a>
+        <Link href="/notifications" className="text-sm font-medium text-brand">&larr; All notifications</Link>
         <div className="mt-3 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Vera Market Updates</h1>

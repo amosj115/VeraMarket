@@ -11,6 +11,7 @@ export async function GET() {
   const shops = await prisma.shop.findMany({
     where: activeShopFilter(),
     orderBy: { createdAt: "desc" },
+    take: 50,
     include: { products: { where: { isAvailable: true }, take: 3 } },
   });
   return NextResponse.json({ shops });

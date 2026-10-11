@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
+import { cdnImage } from "@/lib/image-url";
 import { expireStaleOffers } from "@/lib/offers";
 import { markConversationNotificationsRead } from "@/lib/notifications";
 import { MessageComposer } from "@/components/messages/message-composer";
@@ -19,16 +20,19 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   if (!session?.user) redirect("/login");
   const { id } = await params;
   const me = session.user.id;
-  await expireStaleOffers({ conversationId: id });
-  const conversation = await prisma.conversation.findUnique({
-    where: { id },
-    include: {
-      userA: { select: { id: true, displayName: true, username: true } },
-      userB: { select: { id: true, displayName: true, username: true } },
-      listing: { select: { id: true, title: true, slug: true, priceCents: true, status: true, sellerId: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } },
-      messages: { orderBy: { createdAt: "asc" }, include: { sender: { select: { id: true, displayName: true } } } },
-    },
-  });
+  // Offer expiry and the conversation fetch are independent, so they share one round trip.
+  const [conversation] = await Promise.all([
+    prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        userA: { select: { id: true, displayName: true, username: true } },
+        userB: { select: { id: true, displayName: true, username: true } },
+        listing: { select: { id: true, title: true, slug: true, priceCents: true, status: true, sellerId: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } },
+        messages: { orderBy: { createdAt: "asc" }, include: { sender: { select: { id: true, displayName: true } } } },
+      },
+    }),
+    expireStaleOffers({ conversationId: id }),
+  ]);
   if (!conversation || (conversation.userAId !== me && conversation.userBId !== me)) notFound();
   const other = conversation.userAId === me ? conversation.userB : conversation.userA;
   const archived = conversation.userAId === me ? conversation.archivedByA : conversation.archivedByB;
@@ -36,8 +40,10 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     prisma.userBlock.findFirst({ where: { OR: [{ blockerId: me, blockedId: other.id }, { blockerId: other.id, blockedId: me }] }, select: { blockerId: true } }),
     prisma.offer.findMany({ where: { conversationId: id } }),
   ]);
-  await prisma.message.updateMany({ where: { conversationId: id, senderId: { not: me }, readAt: null }, data: { readAt: new Date() } });
-  await markConversationNotificationsRead(me, id);
+  await Promise.all([
+    prisma.message.updateMany({ where: { conversationId: id, senderId: { not: me }, readAt: null }, data: { readAt: new Date() } }),
+    markConversationNotificationsRead(me, id),
+  ]);
   const offerById = new Map(offers.map((offer) => [offer.id, offer]));
   const listing = conversation.listing;
   const iAmBuyer = listing ? listing.sellerId !== me : false;
@@ -52,7 +58,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         <p className="text-sm text-slate-500">@{other.username}</p>
         {listing && (
           <Link href={`/listing/${listing.slug}`} className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-slate-50 p-3 hover:bg-slate-100">
-            {listing.images[0] && <Image src={listing.images[0].url} alt="" width={56} height={56} sizes="56px" className="h-14 w-14 rounded-md object-cover" />}
+            {listing.images[0] && <Image src={cdnImage(listing.images[0].url, 128)} alt="" width={56} height={56} sizes="56px" className="h-14 w-14 rounded-md object-cover" />}
             <span className="min-w-0"><span className="block truncate text-sm font-medium">{listing.title}</span><span className="block text-sm text-slate-600">{formatZAR(listing.priceCents)}{listing.status !== "ACTIVE" ? ` · ${listing.status.toLowerCase()}` : ""}</span></span>
             <span className="ml-auto shrink-0 text-xs font-medium text-brand">View listing</span>
           </Link>

@@ -48,25 +48,51 @@ export type TrendingItem = {
   labels: string[];
 };
 
-export async function getTrendingPage(userId?: string, requestedOffset = 0) {
-  const offset = Math.max(0, Math.floor(requestedOffset));
+// The market-wide aggregates that feed every visitor's ranking change slowly, but
+// cost ~9 queries per call. Cache them briefly on warm instances; only the
+// user-specific pieces (location, own searches, per-page liked/saved) and the
+// candidate query they feed stay per-request.
+async function fetchTrendingGlobalData() {
   const now = Date.now();
   const dayAgo = new Date(now - DAY);
   const weekAgo = new Date(now - 7 * DAY);
-  const monthAgo = new Date(now - 30 * DAY);
-
-  const [recentEvents, weekEvents, recentLikes, weekLikes, recentSaves, weekSaves, user, userSearches, searches, categorySearches] = await Promise.all([
+  const [recentEvents, weekEvents, recentLikes, weekLikes, recentSaves, weekSaves, searches, categorySearches, boosts] = await Promise.all([
     prisma.listingEngagement.groupBy({ by: ["listingId", "type"], where: { createdAt: { gte: dayAgo } }, _count: { _all: true }, take: 600, orderBy: { _count: { id: "desc" } } }),
     prisma.listingEngagement.groupBy({ by: ["listingId", "type"], where: { createdAt: { gte: weekAgo } }, _count: { _all: true }, take: 600, orderBy: { _count: { id: "desc" } } }),
     prisma.listingLike.groupBy({ by: ["listingId"], where: { createdAt: { gte: dayAgo } }, _count: { _all: true }, take: CANDIDATE_LIMIT, orderBy: { _count: { listingId: "desc" } } }),
     prisma.listingLike.groupBy({ by: ["listingId"], where: { createdAt: { gte: weekAgo } }, _count: { _all: true }, take: CANDIDATE_LIMIT, orderBy: { _count: { listingId: "desc" } } }),
     prisma.favorite.groupBy({ by: ["listingId"], where: { listingId: { not: null }, createdAt: { gte: dayAgo } }, _count: { _all: true }, take: CANDIDATE_LIMIT, orderBy: { _count: { listingId: "desc" } } }),
     prisma.favorite.groupBy({ by: ["listingId"], where: { listingId: { not: null }, createdAt: { gte: weekAgo } }, _count: { _all: true }, take: CANDIDATE_LIMIT, orderBy: { _count: { listingId: "desc" } } }),
-    userId ? prisma.user.findUnique({ where: { id: userId }, select: { location: true } }) : null,
-    userId ? prisma.searchActivity.findMany({ where: { userId, createdAt: { gte: monthAgo } }, orderBy: { createdAt: "desc" }, take: 20, select: { query: true, categorySlug: true } }) : [],
     prisma.searchActivity.groupBy({ by: ["query"], where: { createdAt: { gte: weekAgo } }, _count: { _all: true }, take: 100, orderBy: { _count: { query: "desc" } } }),
     prisma.searchActivity.groupBy({ by: ["categorySlug"], where: { categorySlug: { not: null }, createdAt: { gte: weekAgo } }, _count: { _all: true }, take: 50, orderBy: { _count: { categorySlug: "desc" } } }),
+    activeListingBoosts(),
   ]);
+  return { recentEvents, weekEvents, recentLikes, weekLikes, recentSaves, weekSaves, searches, categorySearches, boosts };
+}
+
+type TrendingGlobal = Awaited<ReturnType<typeof fetchTrendingGlobalData>>;
+
+const TRENDING_GLOBAL_TTL_MS = 60_000;
+let trendingGlobalCache: { at: number; data: TrendingGlobal } | null = null;
+
+async function loadTrendingGlobal(): Promise<TrendingGlobal> {
+  if (trendingGlobalCache && Date.now() - trendingGlobalCache.at < TRENDING_GLOBAL_TTL_MS) return trendingGlobalCache.data;
+  const data = await fetchTrendingGlobalData();
+  trendingGlobalCache = { at: Date.now(), data };
+  return data;
+}
+
+export async function getTrendingPage(userId?: string, requestedOffset = 0) {
+  const offset = Math.max(0, Math.floor(requestedOffset));
+  const now = Date.now();
+  const monthAgo = new Date(now - 30 * DAY);
+
+  const [global, user, userSearches] = await Promise.all([
+    loadTrendingGlobal(),
+    userId ? prisma.user.findUnique({ where: { id: userId }, select: { location: true } }) : null,
+    userId ? prisma.searchActivity.findMany({ where: { userId, createdAt: { gte: monthAgo } }, orderBy: { createdAt: "desc" }, take: 20, select: { query: true, categorySlug: true } }) : [],
+  ]);
+  const { recentEvents, weekEvents, recentLikes, weekLikes, recentSaves, weekSaves, searches, categorySearches, boosts } = global;
 
   const recentEventCounts = countsByListing(recentEvents);
   const weekEventCounts = countsByListing(weekEvents);
@@ -79,7 +105,6 @@ export async function getTrendingPage(userId?: string, requestedOffset = 0) {
   for (const rows of [recentEvents, weekEvents, recentLikes, weekLikes, recentSaves, weekSaves]) {
     for (const row of rows) if (row.listingId) candidateIds.add(row.listingId);
   }
-  const boosts = await activeListingBoosts();
   for (const boostedId of boosts.keys()) candidateIds.add(boostedId);
   const matchingQueries = [...new Set([...userSearches.map((row) => row.query), ...searches.map((row) => row.query)])]
     .filter((query) => query.length > 2 && !query.startsWith("category:"))

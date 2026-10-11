@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 // Normalize various South African phone number formats to E.164 (+27XXXXXXXXX)
 function normalizeSaPhone(input: string): string | null {
@@ -26,7 +27,8 @@ function normalizeSaPhone(input: string): string | null {
   return null;
 }
 
-export function PhoneVerification({ verified }: { verified: boolean }) {
+export function PhoneVerification({ verified, onVerified }: { verified: boolean; onVerified?: () => void }) {
+  const router = useRouter();
   const [localPhone, setLocalPhone] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -63,7 +65,12 @@ export function PhoneVerification({ verified }: { verified: boolean }) {
     });
     const data = await response.json();
     setStatus(response.ok ? "Phone verified." : data.error);
-    if (response.ok) window.location.reload();
+    if (response.ok) {
+      // Soft-refresh server props (e.g. the verification page's status card) and let
+      // parents holding verification state in the client re-sync, without a full reload.
+      router.refresh();
+      onVerified?.();
+    }
     setBusy(false);
   }
 

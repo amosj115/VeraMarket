@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -11,23 +11,85 @@ import { NOTIFICATIONS_CHANGED, announceNotificationsChanged } from "./notificat
 const BELL_PATH = "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0";
 const PREVIEW_CHATS = 4;
 
+// Shared unread-count store. The header renders this bell twice (desktop and
+// mobile; CSS shows only one), so per-instance polling would double every
+// request on every page. One module-level poller serves all subscribers via
+// useSyncExternalStore.
+let sharedUnread = 0;
+const unreadListeners = new Set<() => void>();
+let pollTimer: number | null = null;
+
+function emitUnread() {
+  for (const listener of unreadListeners) listener();
+}
+
+async function fetchUnreadCount() {
+  try {
+    const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
+    if (response.ok) {
+      sharedUnread = (await response.json()).count ?? 0;
+      emitUnread();
+    }
+  } catch {}
+}
+
+function handleVisibility() {
+  if (document.visibilityState === "visible") void fetchUnreadCount();
+}
+
+function startUnreadPolling() {
+  if (pollTimer !== null) return;
+  void fetchUnreadCount();
+  pollTimer = window.setInterval(() => {
+    if (document.visibilityState === "visible") void fetchUnreadCount();
+  }, 30000);
+  document.addEventListener("visibilitychange", handleVisibility);
+  window.addEventListener(NOTIFICATIONS_CHANGED, fetchUnreadCount);
+}
+
+function stopUnreadPolling() {
+  if (pollTimer === null) return;
+  window.clearInterval(pollTimer);
+  pollTimer = null;
+  document.removeEventListener("visibilitychange", handleVisibility);
+  window.removeEventListener(NOTIFICATIONS_CHANGED, fetchUnreadCount);
+}
+
+// Keep the shared badge in sync immediately after local state changes (e.g. mark-all-read).
+function publishUnread(count: number) {
+  sharedUnread = count;
+  emitUnread();
+}
+
+function subscribeUnread(callback: () => void) {
+  unreadListeners.add(callback);
+  startUnreadPolling();
+  return () => {
+    unreadListeners.delete(callback);
+    if (!unreadListeners.size) stopUnreadPolling();
+  };
+}
+
+function getUnreadSnapshot() {
+  return sharedUnread;
+}
+
+function subscribeNothing() {
+  return () => {};
+}
+
 export function NotificationBell({ className = "" }: { className?: string }) {
   const { status } = useSession();
   const router = useRouter();
-  const [unread, setUnread] = useState(0);
+  const authenticated = status === "authenticated";
+  // Logged-out visitors render the bell as a login link and must not start the poller.
+  const storeUnread = useSyncExternalStore(authenticated ? subscribeUnread : subscribeNothing, getUnreadSnapshot, getUnreadSnapshot);
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const authenticated = status === "authenticated";
-
-  const refreshCount = useCallback(async () => {
-    try {
-      const response = await fetch("/api/notifications/unread-count", { cache: "no-store" });
-      if (response.ok) setUnread((await response.json()).count ?? 0);
-    } catch {}
-  }, []);
+  const unread = authenticated ? storeUnread : 0;
 
   const refreshList = useCallback(async () => {
     setLoading(true);
@@ -36,27 +98,12 @@ export function NotificationBell({ className = "" }: { className?: string }) {
       if (response.ok) {
         const data = (await response.json()) as NotificationSummary;
         setSummary(data);
-        setUnread(data.totalUnread);
+        publishUnread(data.totalUnread);
       }
     } finally {
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    if (!authenticated) return;
-    const initial = window.setTimeout(refreshCount, 0);
-    const poll = () => { if (document.visibilityState === "visible") refreshCount(); };
-    const timer = window.setInterval(poll, 30000);
-    document.addEventListener("visibilitychange", poll);
-    window.addEventListener(NOTIFICATIONS_CHANGED, refreshCount);
-    return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", poll);
-      window.removeEventListener(NOTIFICATIONS_CHANGED, refreshCount);
-    };
-  }, [authenticated, refreshCount]);
 
   useEffect(() => {
     if (!open) return;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PhoneVerification } from "@/components/verification/phone-verification";
 import { prepareImageForUpload, uploadProfilePhoto } from "@/lib/client-image";
+import { cdnImage } from "@/lib/image-url";
 import { FACE_FAILURE_MESSAGES, VERIFICATION_PROMPTS, type FaceFailureCode } from "@/lib/face-verification-shared";
 import { DIDIT_FAILURE_MESSAGES, type DiditFailureCode } from "@/lib/didit-biometric";
 
@@ -51,12 +52,12 @@ export function ProfileOnboarding() {
   const [cameraOn, setCameraOn] = useState(false);
   const [prompt, setPrompt] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Shared by the mount load and the "Check again" button, so re-checking the
+  // verification outcome is a single fetch instead of a full page reload.
+  function loadStatus() {
     fetch("/api/profile/verification", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Could not load your profile."))))
       .then((data: Status) => {
-        if (cancelled) return;
         setInfo(data);
         setForm({ displayName: data.displayName, location: data.location, bio: data.bio });
         setConsent(data.consented);
@@ -64,8 +65,11 @@ export function ProfileOnboarding() {
         else if (data.provider === "persona" && data.status === "PENDING" && data.identityState === "PENDING") { setOutcome({ kind: "pending" }); setStep("result"); }
         else if (data.provider === "persona" && data.status === "FAILED") { setOutcome({ kind: "failed", code: null, message: IDENTITY_FAILURE_MESSAGES[data.identityFailure ?? ""] ?? IDENTITY_FAILURE_MESSAGES.FAILED, attemptsRemaining: data.attemptsRemaining }); setStep("result"); }
       })
-      .catch((err: Error) => { if (!cancelled) setLoadError(err.message); });
-    return () => { cancelled = true; };
+      .catch((err: Error) => setLoadError(err.message));
+  }
+
+  useEffect(() => {
+    loadStatus();
   }, []);
 
   useEffect(() => () => { streamRef.current?.getTracks().forEach((track) => track.stop()); }, []);
@@ -406,7 +410,7 @@ export function ProfileOnboarding() {
           <div className="flex items-center gap-4">
             {preview || info.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview ?? info.photoUrl ?? ""} alt="Your profile photo" className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
+              <img src={cdnImage(preview ?? info.photoUrl ?? "", preview ? undefined : 192)} alt="Your profile photo" loading="lazy" decoding="async" className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
             ) : (
               <span className="flex h-24 w-24 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-400">No photo</span>
             )}
@@ -470,7 +474,7 @@ export function ProfileOnboarding() {
           {!info.phoneConfigured && (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Phone verification isn&apos;t configured on this server yet, so this step can&apos;t be completed right now.</p>
           )}
-          <PhoneVerification verified={info.phoneVerification === "VERIFIED"} />
+          <PhoneVerification verified={info.phoneVerification === "VERIFIED"} onVerified={loadStatus} />
           {error && <p className="text-sm text-red-700">{error}</p>}
           <div className="flex gap-2">
             <button type="button" disabled={busy} onClick={() => { setStep("camera"); }} className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50">Back</button>
@@ -514,7 +518,7 @@ export function ProfileOnboarding() {
             <>
               <h1 className="text-2xl font-semibold tracking-tight">Verification in progress</h1>
               <p className="text-sm text-slate-600">Your verification is being reviewed. You&apos;ll be marked as verified once it&apos;s confirmed. This can take a few minutes.</p>
-              <button type="button" onClick={() => window.location.reload()} className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-slate-700">Check again</button>
+              <button type="button" onClick={loadStatus} className="rounded-md border border-border px-4 py-3 text-sm font-semibold text-slate-700">Check again</button>
             </>
           )}
           {outcome.kind === "failed" && (

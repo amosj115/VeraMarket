@@ -16,16 +16,19 @@ export async function GET(request: NextRequest) {
   const cursor = params.get("cursor");
   const scopeFilter = systemOnly ? { type: { notIn: MESSAGE_NOTIFICATION_TYPES } } : {};
 
-  const rows = await prisma.notification.findMany({
-    where: { userId, ...scopeFilter, ...(unreadOnly ? { readAt: null } : {}) },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    // Cursor is scoped by the userId filter, so a foreign id simply yields no rows.
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-  });
+  // Page rows and the unread count are independent — one round trip instead of two.
+  const [rows, unreadCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId, ...scopeFilter, ...(unreadOnly ? { readAt: null } : {}) },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      // Cursor is scoped by the userId filter, so a foreign id simply yields no rows.
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    }),
+    prisma.notification.count({ where: { userId, ...scopeFilter, readAt: null } }),
+  ]);
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
-  const unreadCount = await prisma.notification.count({ where: { userId, ...scopeFilter, readAt: null } });
 
   return NextResponse.json(
     { items: page.map(serializeNotification), nextCursor: hasMore ? page[page.length - 1].id : null, unreadCount },

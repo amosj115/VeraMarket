@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getListings, parseDistanceParams } from "@/lib/listings";
 import { MarketplaceClient } from "./marketplace-client";
 
 export const dynamic = "force-dynamic";
@@ -7,24 +8,34 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function MarketplacePage({ searchParams }: { searchParams: SearchParams }) {
   const params = (await searchParams) as Record<string, string | string[] | undefined>;
-  const query = Array.isArray(params.q) ? params.q[0] : (params.q ?? "");
-  const category = Array.isArray(params.category) ? params.category[0] : (params.category ?? "");
-  const radius = params.radius ? parseInt(Array.isArray(params.radius) ? params.radius[0] : params.radius, 10) : null;
-  const buyerLat = params.lat ? parseFloat(Array.isArray(params.lat) ? params.lat[0] : params.lat) : null;
-  const buyerLng = params.lng ? parseFloat(Array.isArray(params.lng) ? params.lng[0] : params.lng) : null;
-  const sortByDistance = Array.isArray(params.sort) ? params.sort[0] === "distance" : params.sort === "distance";
+  const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+  const query = first(params.q) ?? "";
+  const category = first(params.category) ?? "";
+  // Same clamped distance params the API uses, so server paint and client fetch agree.
+  const { buyerLat, buyerLng, radius, sortByDistance } = parseDistanceParams({
+    lat: first(params.lat),
+    lng: first(params.lng),
+    radius: first(params.radius),
+    sort: first(params.sort),
+  });
 
-  const categories = await prisma.category.findMany({ where: { domain: "MARKETPLACE", isEnabled: true }, orderBy: { sortOrder: "asc" } });
+  // Listings and categories are independent — fetch them together so the first
+  // paint already contains real results instead of an empty grid the client fills.
+  const [categories, initialListings] = await Promise.all([
+    prisma.category.findMany({ where: { domain: "MARKETPLACE", isEnabled: true }, orderBy: { sortOrder: "asc" } }),
+    getListings({ q: query || undefined, category: category || undefined, page: 1, buyerLat, buyerLng, radius, sortByDistance }),
+  ]);
 
   return (
     <MarketplaceClient
       initialCategories={categories}
       initialQuery={query}
       initialCategory={category}
-      initialRadius={Number.isFinite(radius) ? radius : null}
-      initialBuyerLat={buyerLat !== null && Number.isFinite(buyerLat) ? buyerLat : null}
-      initialBuyerLng={buyerLng !== null && Number.isFinite(buyerLng) ? buyerLng : null}
+      initialRadius={radius}
+      initialBuyerLat={buyerLat}
+      initialBuyerLng={buyerLng}
       initialSortByDistance={sortByDistance}
+      initialListings={initialListings.listings}
     />
   );
 }

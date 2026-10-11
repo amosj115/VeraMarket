@@ -642,6 +642,9 @@ model Favorite {
   @@unique([userId, shopProductId])
   @@unique([userId, serviceId])
   @@unique([userId, propertyId])
+  // Per-listing counts and recency (trending group-bys, listing stats). The
+  // existing uniques all lead with userId, so they cannot serve these plans.
+  @@index([listingId, createdAt])
 }
 
 model ListingLike {
@@ -721,6 +724,8 @@ model Message {
   redacted       Boolean      @default(false)
 
   @@index([conversationId, createdAt])
+  // Unread-marking scans a conversation for rows with readAt IS NULL.
+  @@index([conversationId, readAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -753,6 +758,8 @@ model Notification {
   @@unique([userId, dedupeKey])
   @@index([userId, readAt])
   @@index([userId, createdAt])
+  // Time-range scans (scheduler sweeps, cleanup) have no userId filter.
+  @@index([createdAt])
 }
 
 // ---------------------------------------------------------------------------

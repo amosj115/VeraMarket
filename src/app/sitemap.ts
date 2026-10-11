@@ -4,7 +4,9 @@ import { appUrl } from "@/lib/app-url";
 import { publicPath } from "@/lib/share";
 import { activeShopFilter } from "@/lib/shops";
 
-export const dynamic = "force-dynamic";
+// Search engines re-fetch the sitemap periodically; rebuilding it on every crawler
+// hit re-ran four 5000-row queries. An hourly ISR window is plenty for new listings.
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = appUrl();

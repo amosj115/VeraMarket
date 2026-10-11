@@ -24,7 +24,9 @@ export function VerificationBanner() {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [status, pathname]);
+    // Fetched once per authenticated session; pathname only gates rendering below,
+    // so navigations no longer trigger a duplicate verification round-trip.
+  }, [status]);
 
   if (status !== "authenticated" || !needsVerification || pathname.startsWith("/onboarding")) return null;
   return (

@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { formatZAR } from "@/lib/utils";
+import { cdnImage } from "@/lib/image-url";
 import { SaveSearchButton } from "@/components/searches/save-search-button";
 import { SearchActivityRecorder } from "@/components/trending/search-activity-recorder";
 
@@ -45,6 +46,7 @@ export function MarketplaceClient({
   initialBuyerLat,
   initialBuyerLng,
   initialSortByDistance,
+  initialListings,
 }: {
   initialCategories: { id: string; name: string; slug: string }[];
   initialQuery: string;
@@ -53,6 +55,7 @@ export function MarketplaceClient({
   initialBuyerLat: number | null;
   initialBuyerLng: number | null;
   initialSortByDistance: boolean;
+  initialListings?: ListingCard[];
 }): React.ReactElement {
   const [query] = useState(initialQuery);
   const [category] = useState(initialCategory);
@@ -63,11 +66,18 @@ export function MarketplaceClient({
   const [useMyLocation, setUseMyLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [categories] = useState(initialCategories);
-  const [listings, setListings] = useState<ListingCard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listings, setListings] = useState<ListingCard[]>(initialListings ?? []);
+  const [loading, setLoading] = useState(initialListings === undefined);
+  // The server already rendered results for the initial URL — skip the mount fetch
+  // that used to duplicate it (filter changes still refetch below).
+  const skipNextFetch = useRef(initialListings !== undefined);
 
   // Fetch listings when filters change
   useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
     let active = true;
 
     async function fetchListings() {
@@ -228,14 +238,14 @@ export function MarketplaceClient({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {listings.map((listing) => (
+            {listings.map((listing, index) => (
               <Link key={listing.id} href={`/listing/${listing.slug}`} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
                 <div className="relative aspect-square bg-slate-100">
                   <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
                     {listing.boosted && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-amber-950">Boosted</span>}
                     {listing.store && <span className="truncate rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">🏪 Available in Virtual Store</span>}
                   </div>
-                  {listing.images[0] ? <Image src={listing.images[0].url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}
+                  {listing.images[0] ? <Image src={cdnImage(listing.images[0].url, 640)} alt={listing.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" preload={index === 0} className="object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-slate-400">No image</div>}
                   {listing.latitude != null && listing.longitude != null && buyerLat != null && buyerLng != null && (
                     <span className="absolute right-2 bottom-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
                       {Math.round(haversineDistance(buyerLat, buyerLng, listing.latitude, listing.longitude))} km

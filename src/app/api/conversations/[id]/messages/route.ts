@@ -8,6 +8,9 @@ import { blockedBetween, paymentRisk, SAFETY_REMINDER } from "@/lib/chat-safety"
 
 const sendMessageSchema = z.object({ body: z.string().trim().min(1).max(2000) });
 
+// Recent-history window returned by GET; keeps long conversations bounded.
+const MESSAGE_HISTORY_LIMIT = 500;
+
 async function assertParticipant(conversationId: string, userId: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -31,17 +34,24 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const messages = await prisma.message.findMany({
+  // Bound the history window so a long-running conversation cannot return an
+  // unbounded payload: the latest MESSAGE_HISTORY_LIMIT messages, still ascending.
+  // Older messages stay in the database; the UI reads the recent window.
+  const history = await prisma.message.findMany({
     where: { conversationId: id },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
+    take: MESSAGE_HISTORY_LIMIT,
     include: { sender: { select: { id: true, displayName: true, username: true } } },
   });
+  const messages = history.reverse();
 
-  await prisma.message.updateMany({
-    where: { conversationId: id, senderId: { not: session.user.id }, readAt: null },
-    data: { readAt: new Date() },
-  });
-  await markConversationNotificationsRead(session.user.id, id);
+  await Promise.all([
+    prisma.message.updateMany({
+      where: { conversationId: id, senderId: { not: session.user.id }, readAt: null },
+      data: { readAt: new Date() },
+    }),
+    markConversationNotificationsRead(session.user.id, id),
+  ]);
 
   return NextResponse.json({ messages });
 }
@@ -86,20 +96,19 @@ export async function POST(
 
   const risky = paymentRisk(parsed.data.body);
   if (risky) await prisma.message.create({ data: { conversationId: id, senderId: session.user.id, body: SAFETY_REMINDER, kind: "SYSTEM" } });
-  await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date(), archivedByA: false, archivedByB: false } });
-
-  const recipientId =
-    conversation.userAId === session.user.id ? conversation.userBId : conversation.userAId;
-
-  await prisma.notification.create({
-    data: {
-      userId: recipientId,
-      type: "NEW_MESSAGE",
-      title: "New message",
-      body: "You have a new message.",
-      link: `/messages/${id}`,
-    },
-  });
+  // Touched-conversation unarchive and the recipient ping are independent writes.
+  await Promise.all([
+    prisma.conversation.update({ where: { id }, data: { updatedAt: new Date(), archivedByA: false, archivedByB: false } }),
+    prisma.notification.create({
+      data: {
+        userId: recipient,
+        type: "NEW_MESSAGE",
+        title: "New message",
+        body: "You have a new message.",
+        link: `/messages/${id}`,
+      },
+    }),
+  ]);
 
   return NextResponse.json({ message, safetyWarning: risky ? SAFETY_REMINDER : null }, { status: 201 });
 }

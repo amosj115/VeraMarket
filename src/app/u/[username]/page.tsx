@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
+import { cdnImage } from "@/lib/image-url";
 import { getTrust } from "@/lib/trust";
 import { activeShopFilter } from "@/lib/shops";
 import { VerifiedBadge } from "@/components/profile/verified-badge";
@@ -35,15 +36,17 @@ export default async function PublicProfilePage({ params }: Props) {
   });
   if (!user) notFound();
 
-  const reviews = await prisma.review.aggregate({ where: { subjectId: user.id }, _avg: { rating: true }, _count: { _all: true } });
+  const [reviews, trust] = await Promise.all([
+    prisma.review.aggregate({ where: { subjectId: user.id }, _avg: { rating: true }, _count: { _all: true } }),
+    getTrust(user.id),
+  ]);
   const verified = user.profileVerification === "VERIFIED";
-  const trust = await getTrust(user.id);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="flex flex-col items-start gap-5 border-b border-border pb-8 sm:flex-row sm:items-center">
         {user.avatarUrl ? (
-          <Image src={user.avatarUrl} alt={user.displayName} width={96} height={96} sizes="96px" className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
+          <Image src={cdnImage(user.avatarUrl, 256)} alt={user.displayName} width={96} height={96} sizes="96px" className="h-24 w-24 rounded-full bg-slate-100 object-cover" />
         ) : (
           <span className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-light text-3xl font-semibold text-brand">{user.displayName[0]}</span>
         )}
@@ -73,7 +76,7 @@ export default async function PublicProfilePage({ params }: Props) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {user.listings.map((listing) => (
               <Link key={listing.id} href={`/listing/${listing.slug}`} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
-                <div className="relative aspect-square bg-slate-100">{listing.images[0] && <Image src={listing.images[0].url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />}</div>
+                <div className="relative aspect-square bg-slate-100">{listing.images[0] && <Image src={cdnImage(listing.images[0].url, 640)} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />}</div>
                 <div className="p-3"><p className="truncate text-sm font-medium">{listing.title}</p><p className="mt-0.5 text-sm font-semibold text-brand">{formatZAR(listing.priceCents)}</p><p className="truncate text-xs text-slate-500">{listing.location}</p></div>
               </Link>
             ))}

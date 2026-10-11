@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { cdnImage } from "@/lib/image-url";
 import type { ChatGroupDto, SystemGroupDto } from "@/lib/notification-groups";
 import { relativeTime } from "./notification-item";
 
 export function Avatar({ src, name }: { src: string | null; name: string }) {
   if (src) {
-    return <Image src={src} alt="" width={44} height={44} sizes="44px" className="h-11 w-11 shrink-0 rounded-full bg-slate-100 object-cover" />;
+    return <Image src={cdnImage(src, 128)} alt="" width={44} height={44} sizes="44px" className="h-11 w-11 shrink-0 rounded-full bg-slate-100 object-cover" />;
   }
   const initials =
     name
@@ -37,7 +39,7 @@ const ROW_CLASS = "flex w-full items-start gap-3 px-4 py-3 text-left transition"
 // One row per conversation: sender identity, unread message count, latest preview and time.
 export function ChatGroupRow({ group, onNavigate }: { group: ChatGroupDto; onNavigate?: () => void }) {
   return (
-    <a
+    <Link
       href={group.link}
       onClick={onNavigate}
       aria-label={`${group.displayName}, ${group.count} unread message${group.count === 1 ? "" : "s"}`}
@@ -57,7 +59,7 @@ export function ChatGroupRow({ group, onNavigate }: { group: ChatGroupDto; onNav
         </span>
         <span className="mt-0.5 line-clamp-1 block text-sm text-slate-600">{group.preview}</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -65,7 +67,7 @@ export function ChatGroupRow({ group, onNavigate }: { group: ChatGroupDto; onNav
 export function SystemGroupRow({ system, onNavigate }: { system: SystemGroupDto; onNavigate?: () => void }) {
   const unread = system.count > 0;
   return (
-    <a
+    <Link
       href={system.link}
       onClick={onNavigate}
       aria-label={`Vera Market Updates, ${system.count} unread`}
@@ -87,6 +89,6 @@ export function SystemGroupRow({ system, onNavigate }: { system: SystemGroupDto;
         </span>
         <span className="mt-0.5 line-clamp-1 block text-sm text-slate-600">{system.preview}</span>
       </span>
-    </a>
+    </Link>
   );
 }

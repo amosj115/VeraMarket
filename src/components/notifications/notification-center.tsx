@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { NotificationSummary } from "@/lib/notification-groups";
 import { ChatGroupRow, SystemGroupRow } from "./notification-groups";
 import { NOTIFICATIONS_CHANGED, announceNotificationsChanged } from "./notification-item";
@@ -128,9 +129,9 @@ export function NotificationCenter() {
 
       {!loading && !error && (
         <div className="mt-4 px-4 sm:px-0">
-          <a href="/notifications/system" className="block rounded-md border border-border px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-brand-light">
+          <Link href="/notifications/system" className="block rounded-md border border-border px-4 py-2 text-center text-sm font-medium text-slate-700 hover:bg-brand-light">
             See all Vera Market updates
-          </a>
+          </Link>
         </div>
       )}
     </div>

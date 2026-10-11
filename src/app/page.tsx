@@ -8,6 +8,7 @@ import { formatZAR } from "@/lib/utils";
 import { activeShopFilter } from "@/lib/shops";
 import { Greeting } from "@/components/home/greeting";
 import { HeartButton } from "@/components/home/heart-button";
+import { cdnImage } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,7 @@ function CategoryCardGrid({
         subtitle="Buy and sell products"
         href="/marketplace"
         image={covers?.marketplace}
+        preload
       />
       <CategoryCard
         title="Virtual Shop"
@@ -126,15 +128,16 @@ function CategoryCardGrid({
   );
 }
 
-function CategoryCard({ title, subtitle, href, image }: { title: string; subtitle: string; href: string; image?: string }) {
+function CategoryCard({ title, subtitle, href, image, preload }: { title: string; subtitle: string; href: string; image?: string; preload?: boolean }) {
   return (
     <Link href={href} className="group relative flex aspect-[4/3] items-end overflow-hidden rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 shadow-md ring-1 ring-black/5">
       {image && (
         <Image
-          src={image}
+          src={cdnImage(image, 800)}
           alt=""
           fill
           sizes="(max-width: 640px) 50vw, 25vw"
+          preload={preload}
           className="object-cover transition duration-300 group-hover:scale-105"
         />
       )}
@@ -179,7 +182,7 @@ async function TrendingSection({ userId }: { userId?: string }) {
           <div className="relative aspect-square bg-slate-100">
             {item.images[0] ? (
               <Image
-                src={item.images[0].url}
+                src={cdnImage(item.images[0].url, 480)}
                 alt={item.title}
                 fill
                 sizes="(max-width: 640px) 160px, 192px"
