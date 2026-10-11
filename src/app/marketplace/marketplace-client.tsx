@@ -18,7 +18,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(1 - a, 0)));
   return R * c;
 }
 
@@ -140,73 +140,104 @@ export function MarketplaceClient({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><p className="text-sm font-medium text-brand">Marketplace</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Find something real</h1><p className="mt-2 text-sm text-slate-500">Browse products listed by real people on Vera Market.</p></div>
-        <Link href="/sell" className="rounded-md bg-brand px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-dark">Sell something</Link>
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+      {/* Compact header: title + primary action on one line */}
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Marketplace</h1>
+        <Link
+          href="/sell"
+          className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
+        >
+          Sell something
+        </Link>
       </div>
 
-      {/* Search and Filters */}
-      <form className="mt-8 space-y-4" method="get">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <input name="q" defaultValue={query} placeholder="Search listings" className="flex-1 rounded-md border border-border px-4 py-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
-          <select name="category" defaultValue={category} className="rounded-md border border-border bg-white px-4 py-2.5 text-sm outline-none focus:border-brand">
-            <option value="">All categories</option>{categories.map((item) => <option key={item.id} value={item.slug}>{item.name}</option>)}
-          </select>
-          <button className="rounded-md border border-brand px-5 py-2.5 text-sm font-semibold text-brand hover:bg-brand-light">Search</button>
+      {/* Search + primary filters */}
+      <form className="mt-3 space-y-2" method="get" role="search">
+        {/* Unified search bar with inline submit */}
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-white pl-3 focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-slate-400" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            name="q"
+            type="search"
+            defaultValue={query}
+            placeholder="Search listings"
+            aria-label="Search listings"
+            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-slate-400"
+          />
+          <button
+            type="submit"
+            aria-label="Search"
+            className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand text-white transition hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </button>
         </div>
 
-        {/* Distance Filter */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-700">Distance:</span>
-            <select
-              name="radius"
-              value={radius ?? ""}
-              onChange={(e) => setRadius(e.target.value ? parseInt(e.target.value, 10) : null)}
-              className="rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand"
-            >
-              <option value="">All distances</option>
-              {RADIUS_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r} km</option>
-              ))}
-            </select>
-          </div>
+        {/* Primary filters in a single wrapping row */}
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            name="category"
+            defaultValue={category}
+            aria-label="Category"
+            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+          >
+            <option value="">All categories</option>
+            {categories.map((item) => (
+              <option key={item.id} value={item.slug}>{item.name}</option>
+            ))}
+          </select>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-700">Sort by:</span>
-            <select
-              value={sortByDistance ? "distance" : "newest"}
-              onChange={(e) => setSortByDistance(e.target.value === "distance")}
-              className="rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-brand"
-            >
-              <option value="newest">Newest first</option>
-              <option value="distance">Distance (nearest first)</option>
-            </select>
-          </div>
+          <select
+            name="radius"
+            value={radius ?? ""}
+            onChange={(e) => setRadius(e.target.value ? parseInt(e.target.value, 10) : null)}
+            aria-label="Distance"
+            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+          >
+            <option value="">All distances</option>
+            {RADIUS_OPTIONS.map((r) => (
+              <option key={r} value={r}>{r} km</option>
+            ))}
+          </select>
 
-          <div className="flex items-center gap-2">
+          <select
+            value={sortByDistance ? "distance" : "newest"}
+            onChange={(e) => setSortByDistance(e.target.value === "distance")}
+            aria-label="Sort by"
+            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+          >
+            <option value="newest">Newest first</option>
+            <option value="distance">Nearest first</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            disabled={useMyLocation}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${useMyLocation ? "bg-brand text-white opacity-60" : "bg-brand text-white hover:bg-brand-dark"}`}
+          >
+            {useMyLocation ? "Locating..." : "Use my location"}
+          </button>
+
+          {(buyerLat !== null || buyerLng !== null) && (
             <button
               type="button"
-              onClick={handleUseMyLocation}
-              disabled={useMyLocation}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${useMyLocation ? "bg-brand text-white" : "bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-dark"}`}
+              onClick={clearLocation}
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
-              {useMyLocation ? "Locating..." : "Use my location"}
+              Clear location
             </button>
-            {(buyerLat !== null || buyerLng !== null) && (
-              <button
-                type="button"
-                onClick={clearLocation}
-                className="rounded-md border border-border px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Clear location
-              </button>
-            )}
-          </div>
-
-          {locationError && <p className="text-sm text-red-700">{locationError}</p>}
+          )}
         </div>
+
+        {locationError && <p className="text-sm text-red-700">{locationError}</p>}
 
         {/* Preserve location and sort across a full-page form submit */}
         {buyerLat !== null && <input type="hidden" name="lat" value={buyerLat} />}
@@ -214,10 +245,18 @@ export function MarketplaceClient({
         {sortByDistance && <input type="hidden" name="sort" value="distance" />}
       </form>
 
-      <SearchActivityRecorder query={query} categorySlug={category} />
-      {(query || category) && <SaveSearchButton query={query} categorySlug={category} label={query || categories.find((item) => item.slug === category)?.name || "Saved search"} />}
+      <div className="mt-2 flex items-center gap-4 text-sm">
+        <SearchActivityRecorder query={query} categorySlug={category} />
+        {(query || category) && (
+          <SaveSearchButton
+            query={query}
+            categorySlug={category}
+            label={query || categories.find((item) => item.slug === category)?.name || "Saved search"}
+          />
+        )}
+      </div>
 
-      <div className="mt-8">
+      <div className="mt-3">
         {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {[...Array(8)].map((_, i) => (
