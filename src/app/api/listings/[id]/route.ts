@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { listingUpdateSchema } from "@/lib/validation/listing-update";
 import { dropListingMatchNotifications, notifyPriceChange, notifyWishlistStatus, safeNotify } from "@/lib/notifications";
+import { enforceReviewStatus } from "@/lib/review-enforcement";
 
 async function ownedListing(id: string, userId: string) { return prisma.listing.findFirst({ where: { id, sellerId: userId } }); }
 
@@ -10,6 +11,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const review = enforceReviewStatus(user);
+  if (review.isBlocked) return review.response;
+
   const existing = await ownedListing(id, session.user.id);
   if (!existing) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   const parsed = listingUpdateSchema.safeParse(await request.json().catch(() => null));
@@ -25,6 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   return NextResponse.json({ listing: { id: listing.id, slug: listing.slug, status: listing.status } });
 }
+
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();

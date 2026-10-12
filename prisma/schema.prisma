@@ -204,9 +204,39 @@ enum OtpPurpose {
   PASSWORD_RESET
 }
 
+enum IdentityVerificationState {
+  CREATED
+  PENDING
+  APPROVED
+  DECLINED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  PERMANENT_FAILURE
+}
+
 // ---------------------------------------------------------------------------
 // Auth / Users
 // ---------------------------------------------------------------------------
+
+model DeletedAccountRecord {
+  id               String   @id @default(cuid())
+  emailHash        String   @unique
+  reason           String
+  customReason     String?
+  deletedAt        DateTime @default(now())
+  deletedByUserId  String
+  deletedBy        User     @relation("DeletedBy", fields: [deletedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([emailHash])
+}
 
 model User {
   id                   String             @id @default(cuid())
@@ -227,6 +257,7 @@ model User {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   deactivatedAt        DateTime?
+  flaggedForReview     Boolean            @default(false)
 
   sessions                     Session[]
   listings                     Listing[]
@@ -272,6 +303,7 @@ model User {
   accountHolds             AccountHold[]        @relation("AccountHoldSubject")
   accountHoldsPlaced       AccountHold[]        @relation("AccountHoldPlacer")
   accountHoldsLifted       AccountHold[]        @relation("AccountHoldLifter")
+  deletedAccounts          DeletedAccountRecord[] @relation("DeletedBy")
 
   @@index([role])
   @@index([status])
@@ -951,14 +983,23 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 }
 
-enum IdentityVerificationState {
-  CREATED
-  PENDING
-  APPROVED
-  DECLINED
-  FAILED
-  CANCELLED
-  EXPIRED
+// Email delivery queue for transactional notification emails. Jobs move through
+// PENDING -> PROCESSING -> SENT, or FAILED (retry with backoff) and finally
+// PERMANENT_FAILURE once a retry limit is reached or the provider rejects the
+// address. See src/lib/email.ts for the worker and src/app/api/cron for the cron entry.
+model NotificationJob {
+  id               String     @id @default(cuid())
+  recipientEmail   String
+  subject          String
+  text             String
+  html             String?
+  status           JobStatus @default(PENDING)
+  attempts         Int       @default(0)
+  nextRetryAt      DateTime   @default(now())
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([status, nextRetryAt])
 }
 
 // One row per external identity-verification session (Persona inquiry).

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/security/password";
 import { registerErrorMessage, registerSchema } from "@/lib/validation/auth";
+import { hashEmailSecure, hashEmailLegacy } from "@/lib/account-security";
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 5;
@@ -52,6 +53,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Repeat-offender check: check for HMAC match or legacy SHA-256 match.
+    const secret = process.env.AUTH_SECRET || process.env.DELETED_ACCOUNT_HASH_SECRET;
+    if (!secret) {
+      console.error("[register] Hashing secret not configured. New accounts will be flagged for review by default.");
+    }
+
+    const hmac = secret ? hashEmailSecure(email, secret) : null;
+    const legacy = hashEmailLegacy(email);
+
+    let flaggedForReview = false;
+
+    if (!secret) {
+      // Safety fallback: If we can't run repeat-offender detection, the account must be reviewed.
+      flaggedForReview = true;
+    } else if (hmac) {
+      const record = await prisma.deletedAccountRecord.findUnique({ where: { emailHash: hmac } });
+      if (record) flaggedForReview = true;
+    }
+
+    if (!flaggedForReview) {
+      const legacyRecord = await prisma.deletedAccountRecord.findUnique({ where: { emailHash: legacy } });
+      if (legacyRecord) {
+        flaggedForReview = true;
+        // Migration: Convert legacy hash to HMAC.
+        if (hmac) {
+          await prisma.deletedAccountRecord.update({
+            where: { id: legacyRecord.id },
+            data: { emailHash: hmac },
+          });
+        }
+      }
+    }
+
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
@@ -60,6 +94,7 @@ export async function POST(request: NextRequest) {
         username,
         email,
         passwordHash,
+        flaggedForReview,
       },
       select: { id: true, email: true, username: true },
     });

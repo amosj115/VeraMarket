@@ -12,7 +12,6 @@ import { anonymizeAccount, countActiveAdmins, deleteSolelyOwnedData, restrictOwn
 // offers, reports and moderation history.
 export async function DELETE(request: NextRequest) {
   const session = await auth();
-  console.log("DELETE /api/account session:", JSON.stringify(session));
   const userId = session?.user?.id;
   if (!userId) return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
 

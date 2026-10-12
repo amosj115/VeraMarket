@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireVerifiedProfile } from "@/lib/profile-gate";
+import { enforceReviewStatus } from "@/lib/review-enforcement";
 import { createListingSchema } from "@/lib/validation/listing";
 import { slugify } from "@/lib/utils";
 import { getListings, parseDistanceParams } from "@/lib/listings";
@@ -40,6 +41,10 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const review = enforceReviewStatus(user);
+  if (review.isBlocked) return review.response;
 
   const blocked = await requireVerifiedProfile(session.user.id);
   if (blocked) return blocked;

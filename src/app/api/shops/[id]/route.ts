@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { shopUpdateSchema } from "@/lib/validation/shop";
+import { enforceReviewStatus } from "@/lib/review-enforcement";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const review = enforceReviewStatus(user);
+  if (review.isBlocked) return review.response;
+
   const shop = await prisma.shop.findFirst({ where: { id, ownerId: session.user.id }, select: { id: true } });
   if (!shop) return NextResponse.json({ error: "Virtual Store not found" }, { status: 404 });
   const parsed = shopUpdateSchema.safeParse(await request.json().catch(() => null));

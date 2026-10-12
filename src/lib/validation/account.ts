@@ -19,7 +19,31 @@ export const adminLiftHoldSchema = z.object({
   userId: z.string().cuid(),
 });
 
+export const DELETION_REASONS = [
+  "Scamming or fraudulent activity",
+  "Suspicious behavior",
+  "Robbery or reported theft",
+  "Misleading or fraudulent listings",
+  "Selling prohibited or illegal items",
+  "Impersonation or false identity",
+  "Repeated violations of Vera Market rules",
+  "Harassment, threats, or abusive behavior",
+  "Multiple credible user reports",
+  "Spam or platform abuse",
+  "Other",
+] as const;
+
 export const adminDeleteAccountSchema = z.object({
   userId: z.string().cuid(),
-  reason: z.string().trim().min(5, "Give a reason of at least 5 characters.").max(500),
+  reason: z.enum(DELETION_REASONS),
+  customReason: z.string().trim().optional(),
+});
+
+// Flagging an account for review marks it under investigation; it is NOT a finding of
+// wrongdoing. A flagged user keeps their account and can still browse, buy and message —
+// they simply cannot create or publish new content until an admin clears the flag
+// (see src/lib/review-enforcement.ts).
+export const adminReviewFlagSchema = z.object({
+  userId: z.string().cuid(),
+  reason: z.string().trim().min(5, "Give a reason of at least 5 characters.").max(500).optional(),
 });

@@ -175,6 +175,12 @@ async function main() {
   check("10. deleted user cannot log back in", !delLoginSession?.user, delLoginSession);
   check("10. self-deletion writes an audit record", (await prisma.auditLog.count({ where: { targetId: victim.id, action: "ACCOUNT_SELF_DELETED" } })) === 1);
 
+  // --- Deleted accounts are excluded from the admin list, but their history is kept ---
+  const tombstoneList = await adminClient.req("/api/admin/accounts?q=deleted_");
+  const tombstoneUsers = (await tombstoneList.json().catch(() => ({ users: [] }))).users as { id: string }[];
+  check("9b. deleted accounts excluded from admin account list", !tombstoneUsers.some((u) => u.id === victim.id), tombstoneUsers);
+  check("9b. deletion history preserved for admins", (await prisma.auditLog.count({ where: { targetId: victim.id, action: "ACCOUNT_SELF_DELETED" } })) === 1);
+
   // --- TASK 6.2: user cannot delete another user's account by swapping the payload ---
   // This must run AFTER self-deletion because the endpoint uses the session ID,
   // so calling it now will just try (and fail) to delete the already-deleted victim.
@@ -197,19 +203,50 @@ async function main() {
     const auditRows = await prisma.auditLog.findMany({ where: { targetType: "USER", targetId: victim.id }, select: { action: true } });
     check("10. expected audit actions recorded", ["ACCOUNT_HOLD_PLACED", "ACCOUNT_HOLD_LIFTED", "ACCOUNT_SELF_DELETED"].every((a) => auditRows.some((r) => r.action === a)), auditRows.map((r) => r.action));
 
-    const { client: freshClient } = await makeUser("fresh");
+    const { user: fresh, client: freshClient } = await makeUser("fresh");
     await freshClient.login();
     check("12. normal login still works", !!(await freshClient.session())?.user);
     const normalCreate = await freshClient.req("/api/listings", json({ title: "Fresh listing", categoryId: category.id, description: "This is a valid description that meets the minimum length requirement.", priceRand: 10, condition: "GOOD", location: "Cape Town", imageUrls: ["https://example.com/img.jpg"] }));
     check("12. normal user can still create a listing", normalCreate.status === 200 || normalCreate.status === 201, normalCreate.status);
 
+    // --- Review flag: server-side enforcement, not just UI ---
+    // A flagged account keeps its session and ACTIVE status (a flag is not a ban) but
+    // cannot create or publish content until an admin clears the flag.
+    const userFlag = await freshClient.req("/api/admin/accounts", json({ userId: other.id, action: "flagReview" }, "PATCH"));
+    check("13. non-admin cannot flag for review", userFlag.status === 403, userFlag.status);
+    const flagRes = await adminClient.req("/api/admin/accounts", json({ userId: fresh.id, action: "flagReview" }, "PATCH"));
+    check("13. admin flags an account for review", flagRes.status === 200, await flagRes.clone().json().catch(() => flagRes.status));
+    const flagRow = await prisma.user.findUnique({ where: { id: fresh.id }, select: { flaggedForReview: true, status: true } });
+    check("13. flag persisted without suspending the account", flagRow?.flaggedForReview === true && flagRow?.status === "ACTIVE", flagRow);
+    const dupFlag = await adminClient.req("/api/admin/accounts", json({ userId: fresh.id, action: "flagReview" }, "PATCH"));
+    check("13. duplicate flag is rejected", dupFlag.status === 400, dupFlag.status);
+    const missingFlag = await adminClient.req("/api/admin/accounts", json({ userId: `c${run}missing000000000000`, action: "flagReview" }, "PATCH"));
+    check("13. flagging an unknown account is a 404", missingFlag.status === 404, missingFlag.status);
+    const flaggedSession = await freshClient.session();
+    check("13. flagged user keeps their session (flag is not a ban)", !!flaggedSession?.user);
+    const flaggedCreate = await freshClient.req("/api/listings", json({ title: "Flagged listing", categoryId: category.id, description: "This is a valid description that meets the minimum length requirement.", priceRand: 10, condition: "GOOD", location: "Cape Town", imageUrls: ["https://example.com/img.jpg"] }));
+    check("13. flagged user cannot create a listing via API", flaggedCreate.status === 403, flaggedCreate.status);
+    const flaggedShop = await freshClient.req("/api/shops", json({ name: "Flagged store", description: "This store should be blocked while the flag is active.", address: "1 Test Street, Cape Town" }));
+    check("13. flagged user cannot create a shop via API", flaggedShop.status === 403, flaggedShop.status);
+    const clearFlag = await adminClient.req("/api/admin/accounts", json({ userId: fresh.id, action: "clearReview" }, "PATCH"));
+    check("13. admin clears the review flag", clearFlag.status === 200, await clearFlag.clone().json().catch(() => clearFlag.status));
+    const clearedRow = await prisma.user.findUnique({ where: { id: fresh.id }, select: { flaggedForReview: true } });
+    check("13. cleared flag persisted", clearedRow?.flaggedForReview === false, clearedRow);
+    const unflaggedCreate = await freshClient.req("/api/listings", json({ title: "Unflagged listing", categoryId: category.id, description: "This is a valid description that meets the minimum length requirement.", priceRand: 10, condition: "GOOD", location: "Cape Town", imageUrls: ["https://example.com/img.jpg"] }));
+    check("13. publishing works again after the flag is cleared", unflaggedCreate.status === 200 || unflaggedCreate.status === 201, unflaggedCreate.status);
+    const flagAudit = await prisma.auditLog.findMany({ where: { targetType: "USER", targetId: fresh.id }, select: { action: true } });
+    check("13. flag and clear are audit-logged", ["ACCOUNT_FLAGGED_FOR_REVIEW", "ACCOUNT_REVIEW_CLEARED"].every((a) => flagAudit.some((r) => r.action === a)), flagAudit.map((r) => r.action));
+
   // --- Cleanup fixtures ---
-  await prisma.auditLog.deleteMany({ where: { targetId: { in: [victim.id, admin.id, other.id] } } });
+  await prisma.auditLog.deleteMany({ where: { targetId: { in: [victim.id, admin.id, other.id, fresh.id] } } });
   await prisma.accountHold.deleteMany({ where: { userId: { in: [victim.id, other.id] } } });
   await prisma.listing.deleteMany({ where: { slug: { startsWith: `acct-${run}-` } } });
   await prisma.shop.deleteMany({ where: { id: shop.id } });
   await prisma.user.deleteMany({ where: { id: { in: [victim.id, other.id] } } });
   await prisma.user.deleteMany({ where: { email: { in: [`acct-${run}-admin@example.test`, `acct-${run}-fresh@example.test`] } } });
+  // Listings created through the API (flag tests) cascade with their owner above;
+  // the slug-prefix sweep also catches any orphaned fixtures from earlier checks.
+  await prisma.listing.deleteMany({ where: { title: { in: ["Flagged listing", "Unflagged listing"] } } });
 }
 
 main()

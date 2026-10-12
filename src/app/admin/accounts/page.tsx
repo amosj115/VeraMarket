@@ -12,10 +12,17 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
   const { q } = await searchParams;
   const query = q?.trim() ?? "";
 
+  // Deleted (DEACTIVATED) tombstones are intentionally excluded, matching
+  // GET /api/admin/accounts: every action here would reject them anyway. Their history
+  // stays fully queryable in AuditLog (ACCOUNT_DELETED_BY_ADMIN /
+  // ACCOUNT_SELF_DELETED) and DeletedAccountRecord.
   const users = await prisma.user.findMany({
-    where: query
-      ? { OR: [{ username: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }, { displayName: { contains: query, mode: "insensitive" } }] }
-      : undefined,
+    where: {
+      status: { not: "DEACTIVATED" },
+      OR: query
+        ? [{ username: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }, { displayName: { contains: query, mode: "insensitive" } }]
+        : undefined,
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: {
@@ -25,6 +32,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
       email: true,
       role: true,
       status: true,
+      flaggedForReview: true,
       createdAt: true,
       accountHolds: { where: { active: true }, select: { id: true, reason: true, placedAt: true, placedBy: { select: { username: true } } }, take: 1 },
       _count: { select: { listings: true, shops: true } },
@@ -55,6 +63,9 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
                         <p className="font-semibold text-slate-900">{user.displayName}</p>
                         <p className="mt-0.5 truncate text-sm text-slate-500">@{user.username} · {user.email}</p>
                         <p className="mt-2 text-xs text-slate-400">{user.role} · {user.status.replaceAll("_", " ")} · {user._count.listings} listings · {user._count.shops} shops · joined {user.createdAt.toLocaleDateString("en-ZA", { month: "short", year: "numeric" })}</p>
+                        {user.flaggedForReview && (
+                          <p className="mt-2 inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Flagged for review — cannot publish new content</p>
+                        )}
                         {hold && (
                       <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         <p className="font-medium">On hold</p>
@@ -63,7 +74,7 @@ export default async function AdminAccountsPage({ searchParams }: { searchParams
                       </div>
                     )}
                   </div>
-                  <AccountManagement user={{ id: user.id, username: user.username, role: user.role, status: user.status, activeHold: hold ? { reason: hold.reason } : null }} selfId={session.user.id} />
+                  <AccountManagement user={{ id: user.id, username: user.username, role: user.role, status: user.status, flaggedForReview: user.flaggedForReview, activeHold: hold ? { reason: hold.reason } : null }} selfId={session.user.id} />
                 </div>
               </div>
             );
