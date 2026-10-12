@@ -5,6 +5,6 @@
     { "path": "/api/notifications/cleanup", "schedule": "0 2 * * *" },
     { "path": "/api/trending/notify", "schedule": "0 3 * * *" },
     { "path": "/api/shops/expire", "schedule": "0 4 * * *" },
-    { "path": "/api/cron/process-emails", "schedule": "0 * * * *" }
+    { "path": "/api/cron/process-emails", "schedule": "0 5 * * *" }
   ]
 }
