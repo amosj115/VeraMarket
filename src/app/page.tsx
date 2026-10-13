@@ -41,25 +41,38 @@ export default async function Home() {
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent" aria-hidden="true" />
         <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-10">
           <Greeting />
-          <form action="/marketplace" role="search" className="mt-5 flex items-center gap-2 rounded-xl bg-white p-1.5 shadow-lg">
-            <svg viewBox="0 0 24 24" className="ml-2 h-5 w-5 shrink-0 fill-none stroke-slate-400" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              name="q"
-              type="search"
-              placeholder="Search on Vera Market..."
-              aria-label="Search on Vera Market"
-              className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm text-foreground outline-none placeholder:text-slate-400"
-            />
-            <button type="submit" aria-label="Search" className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand-dark">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-            </button>
-          </form>
+     <div className="mt-5 flex items-center gap-2 sm:gap-3">
+  <form action="/marketplace" role="search" className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-white p-1.5 shadow-lg">
+    <svg viewBox="0 0 24 24" className="ml-1.5 hidden h-5 w-5 shrink-0 fill-none stroke-slate-400 sm:block" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+    <input
+      name="q"
+      type="search"
+      placeholder="Search Vera Market..."
+      aria-label="Search on Vera Market"
+      className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm text-foreground outline-none placeholder:text-slate-400"
+    />
+    <button type="submit" aria-label="Search" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition hover:bg-brand-dark">
+      <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+    </button>
+  </form>
+  <Link
+    href="/sell"
+    className="flex h-[52px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand px-2 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-dark sm:px-5"
+  >
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+    Sell Something
+  </Link>
+</div>
+
         </div>
       </section>
 
