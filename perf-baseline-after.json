@@ -1,0 +1,83 @@
+{
+  "trending": {
+    "coldMs": 343,
+    "warmMs": 53,
+    "userMs": 62,
+    "items": 12
+  },
+  "notifications": {
+    "unreadTotalsMs": 5,
+    "summaryMs": 26,
+    "totalUnread": 36
+  },
+  "marketplace": {
+    "findManyMs": 11,
+    "countMs": 7,
+    "rows": 24,
+    "total": 67,
+    "payloadBytes": 29180
+  },
+  "listEndpoints": {
+    "servicesMs": 3,
+    "servicesBytes": 9075,
+    "servicesRows": 10,
+    "propertiesMs": 2,
+    "propertiesBytes": 9093,
+    "propertiesRows": 10,
+    "conversationsMs": 5,
+    "conversationsBytes": 7663,
+    "conversationsRows": 4
+  },
+  "messages": {
+    "ms": 3,
+    "rows": 25,
+    "payloadBytes": 12248
+  },
+  "explain": {
+    "favoriteGroupBy": [
+      "Limit  (cost=58.18..58.56 rows=152 width=34) (actual time=0.614..0.625 rows=148 loops=1)",
+      "  ->  Sort  (cost=58.18..58.56 rows=152 width=34) (actual time=0.613..0.618 rows=148 loops=1)",
+      "        Sort Key: (count(*)) DESC",
+      "        Sort Method: quicksort  Memory: 35kB",
+      "        ->  HashAggregate  (cost=51.16..52.68 rows=152 width=34) (actual time=0.561..0.577 rows=148 loops=1)",
+      "              Group Key: \"listingId\"",
+      "              Batches: 1  Memory Usage: 48kB",
+      "              ->  Seq Scan on \"Favorite\"  (cost=0.00..50.25 rows=181 width=26) (actual time=0.016..0.512 rows=174 loops=1)",
+      "                    Filter: ((\"listingId\" IS NOT NULL) AND (\"createdAt\" >= (now() - '1 day'::interval)))",
+      "                    Rows Removed by Filter: 1326",
+      "Planning Time: 1.094 ms",
+      "Execution Time: 0.656 ms"
+    ],
+    "unreadMessages": [
+      "Aggregate  (cost=152.41..152.42 rows=1 width=8) (actual time=0.774..0.775 rows=1 loops=1)",
+      "  ->  Hash Join  (cost=4.85..152.35 rows=25 width=0) (actual time=0.046..0.772 rows=10 loops=1)",
+      "        Hash Cond: (m.\"conversationId\" = c.id)",
+      "        ->  Seq Scan on \"Message\" m  (cost=0.00..145.50 rows=737 width=26) (actual time=0.011..0.673 rows=735 loops=1)",
+      "              Filter: ((\"readAt\" IS NULL) AND (\"senderId\" <> 'cmv34hbwo0000c8v4ddhb1lbu'::text))",
+      "              Rows Removed by Filter: 2265",
+      "        ->  Hash  (cost=4.80..4.80 rows=4 width=26) (actual time=0.029..0.030 rows=4 loops=1)",
+      "              Buckets: 1024  Batches: 1  Memory Usage: 9kB",
+      "              ->  Seq Scan on \"Conversation\" c  (cost=0.00..4.80 rows=4 width=26) (actual time=0.006..0.025 rows=4 loops=1)",
+      "                    Filter: ((\"userAId\" = 'cmv34hbwo0000c8v4ddhb1lbu'::text) OR (\"userBId\" = 'cmv34hbwo0000c8v4ddhb1lbu'::text))",
+      "                    Rows Removed by Filter: 116",
+      "Planning Time: 0.690 ms",
+      "Execution Time: 0.798 ms"
+    ],
+    "ilikeSearch": [
+      "Limit  (cost=0.27..25.09 rows=24 width=34) (actual time=0.023..1.407 rows=24 loops=1)",
+      "  ->  Index Scan Backward using \"Listing_status_createdAt_idx\" on \"Listing\"  (cost=0.27..102.65 rows=99 width=34) (actual time=0.023..1.405 rows=24 loops=1)",
+      "        Index Cond: (status = 'ACTIVE'::\"ListingStatus\")",
+      "        Filter: ((title ~~* '%phone%'::text) OR (description ~~* '%phone%'::text))",
+      "        Rows Removed by Filter: 139",
+      "Planning Time: 1.070 ms",
+      "Execution Time: 1.421 ms"
+    ],
+    "notificationPurge": [
+      "Seq Scan on \"Notification\"  (cost=0.00..134.88 rows=1 width=26) (actual time=1.198..1.198 rows=0 loops=1)",
+      "  Filter: (\"createdAt\" < (now() - '180 days'::interval))",
+      "  Rows Removed by Filter: 3000",
+      "Planning Time: 0.619 ms",
+      "Execution Time: 1.206 ms"
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+[
+    {
+        "url":  "/",
+        "coldMs":  947,
+        "warm1":  269,
+        "warm2":  257,
+        "bytes":  71369
+    },
+    {
+        "url":  "/trending",
+        "coldMs":  286,
+        "warm1":  281,
+        "warm2":  264,
+        "bytes":  67821
+    },
+    {
+        "url":  "/marketplace",
+        "coldMs":  97,
+        "warm1":  88,
+        "warm2":  87,
+        "bytes":  21774
+    },
+    {
+        "url":  "/listing/perftest-listing-1",
+        "coldMs":  145,
+        "warm1":  122,
+        "warm2":  115,
+        "bytes":  46417
+    },
+    {
+        "url":  "/api/listings?q=phone\u0026page=1",
+        "coldMs":  389,
+        "warm1":  104,
+        "warm2":  96,
+        "bytes":  31302
+    },
+    {
+        "url":  "/api/trending",
+        "coldMs":  335,
+        "warm1":  139,
+        "warm2":  121,
+        "bytes":  6914
+    },
+    {
+        "url":  "/api/services",
+        "coldMs":  41,
+        "warm1":  35,
+        "warm2":  38,
+        "bytes":  9088
+    },
+    {
+        "url":  "/api/properties",
+        "coldMs":  39,
+        "warm1":  32,
+        "warm2":  32,
+        "bytes":  9108
+    },
+    {
+        "url":  "/api/shops",
+        "coldMs":  46,
+        "warm1":  33,
+        "warm2":  40,
+        "bytes":  7301
+    },
+    {
+        "url":  "/shops/perftest-shop-0",
+        "coldMs":  155,
+        "warm1":  147,
+        "warm2":  139,
+        "bytes":  52337
+    },
+    {
+        "url":  "/u/perftest_user_0",
+        "coldMs":  128,
+        "warm1":  116,
+        "warm2":  110,
+        "bytes":  46384
+    },
+    {
+        "url":  "/messages",
+        "coldMs":  123,
+        "warm1":  70,
+        "warm2":  76,
+        "bytes":  14294
+    }
+]
