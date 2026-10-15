@@ -71,12 +71,7 @@ test("private listing creation API rejects an unauthenticated request", async ({
   expect(response.status()).toBe(401);
 });
 
-test("legacy trending URL redirects to the marketplace", async ({ page }) => {
-  await page.goto("/trending");
-  await expect(page).toHaveURL(/\/marketplace$/);
-});
-
-test("marketplace users can keep liked and saved listings in their account", async ({ page }) => {
+test("active listings appear in Trending and marketplace users can like and save them", async ({ page }) => {
   const marketplaceEmail = `e2e-marketplace-${runId}@example.test`;
   const marketplaceUsername = `market_${runId.replaceAll("-", "").slice(0, 20)}`;
   const marketplaceTitle = `Marketplace E2E listing ${runId.slice(0, 8)}`;
@@ -105,7 +100,70 @@ test("marketplace users can keep liked and saved listings in their account", asy
     },
   });
 
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Trending for You", exact: true })).toBeVisible();
+  const trendingHomeLink = page.getByRole("link", { name: /View All/ });
+  await expect(trendingHomeLink).toBeVisible();
+  await expect(trendingHomeLink).toHaveAttribute("href", "/trending");
+  const homepageListingLink = page.getByRole("link", { name: `View listing ${marketplaceTitle}` });
+  await expect(homepageListingLink).toHaveAttribute("href", `/listing/${listing.slug}`);
+  const homeFitsDesktop = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(homeFitsDesktop).toBeTruthy();
+
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Trending for You", exact: true })).toBeVisible();
+  await expect(trendingHomeLink).toBeVisible();
+  await expect(homepageListingLink).toBeVisible();
+  const homeFitsMobile = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(homeFitsMobile).toBeTruthy();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/trending");
+  await expect(page.getByRole("heading", { name: "Trending", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: marketplaceTitle, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: `View listing details for ${marketplaceTitle}` }))
+    .toHaveAttribute("href", `/listing/${listing.slug}`);
+
+  const feedViewport = page.getByRole("region", { name: "Trending listings feed" });
+  const measureFeed = () => feedViewport.evaluate((feed) => {
+    const slides = Array.from(feed.querySelectorAll<HTMLElement>("[data-trending-feed-item]"));
+    const firstRect = slides[0]?.getBoundingClientRect();
+    const nextRect = slides[1]?.getBoundingClientRect();
+    const cardRect = slides[0]?.querySelector(".grid")?.getBoundingClientRect();
+    const style = getComputedStyle(feed);
+    return {
+      snapType: style.scrollSnapType,
+      snapStop: slides[0] ? getComputedStyle(slides[0]).scrollSnapStop : "",
+      feedHeight: feed.clientHeight,
+      firstSlideHeight: firstRect?.height ?? 0,
+      nextSlideDistance: firstRect && nextRect ? nextRect.top - firstRect.top : null,
+      cardHeight: cardRect?.height ?? 0,
+      cardWidth: cardRect?.width ?? 0,
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth,
+    };
+  });
+
+  const desktopFeed = await measureFeed();
+  expect(desktopFeed.snapType).toContain("mandatory");
+  expect(desktopFeed.snapStop).toBe("always");
+  expect(desktopFeed.firstSlideHeight).toBe(desktopFeed.feedHeight);
+  if (desktopFeed.nextSlideDistance !== null) expect(desktopFeed.nextSlideDistance).toBe(desktopFeed.feedHeight);
+  expect(desktopFeed.cardWidth).toBeLessThan(desktopFeed.viewportWidth);
+  expect(desktopFeed.cardHeight).toBeLessThan(desktopFeed.viewportHeight);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Trending", exact: true })).toBeVisible();
+  const mobileFeed = await measureFeed();
+  expect(mobileFeed.snapType).toContain("mandatory");
+  expect(mobileFeed.snapStop).toBe("always");
+  expect(mobileFeed.firstSlideHeight).toBe(mobileFeed.feedHeight);
+  if (mobileFeed.nextSlideDistance !== null) expect(mobileFeed.nextSlideDistance).toBe(mobileFeed.feedHeight);
+  const trendingFitsMobile = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(trendingFitsMobile).toBeTruthy();
+
   const searchActivityResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/search-activity") && response.request().method() === "POST"
   );
