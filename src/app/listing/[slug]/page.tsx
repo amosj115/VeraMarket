@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/app-url";
 import { formatZAR } from "@/lib/utils";
@@ -37,15 +38,17 @@ export default async function ListingPage({ params }: Props) {
       images: { orderBy: { sortOrder: "asc" } },
       category: true,
       seller: { select: { id: true, username: true, displayName: true, createdAt: true, identityVerification: true, profileVerification: true } },
+      _count: { select: { likes: true } },
     },
   });
   if (!listing || !["ACTIVE", "SOLD", "REMOVED"].includes(listing.status)) notFound();
   const available = listing.status === "ACTIVE";
+  const session = await auth();
 
   // Similar listings keep visitors browsing when the item is gone, and fill out an active page.
   // Trust and store lookups only matter for an active listing and are independent of each
   // other, so all three run in parallel instead of three sequential round trips.
-  const [related, trust, store] = await Promise.all([
+  const [related, trust, store, existingLike] = await Promise.all([
     prisma.listing.findMany({
       where: { status: "ACTIVE", categoryId: listing.categoryId, id: { not: listing.id } },
       orderBy: { createdAt: "desc" },
@@ -54,6 +57,12 @@ export default async function ListingPage({ params }: Props) {
     }),
     available ? getTrust(listing.seller.id) : Promise.resolve(null),
     available ? activeStoreForSeller(listing.seller.id) : Promise.resolve(null),
+    available && session?.user?.id
+      ? prisma.listingLike.findUnique({
+          where: { userId_listingId: { userId: session.user.id, listingId: listing.id } },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
   ]);
   const relatedGrid = related.length > 0 && (
     <section className="mt-12">
@@ -123,7 +132,7 @@ export default async function ListingPage({ params }: Props) {
             {trust && <p className="mt-2 text-xs font-medium text-brand">Vera Trust {trust.score}/100 · {trust.tier}</p>}
             <FollowButton kind="seller" id={listing.seller.id} label="Follow seller" />
           </div>
-          <ListingActions listingId={listing.id} title={listing.title} priceCents={listing.priceCents} />
+          <ListingActions listingId={listing.id} title={listing.title} priceCents={listing.priceCents} initialLiked={Boolean(existingLike)} initialLikeCount={listing._count.likes} />
         </div>
       </div>
       {relatedGrid}

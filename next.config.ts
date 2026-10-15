@@ -33,6 +33,9 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [storageImagePattern, cloudinaryImagePattern].filter(Boolean) as NonNullable<typeof storageImagePattern>[],
   },
+  async redirects() {
+    return [{ source: "/trending", destination: "/marketplace", permanent: false }];
+  },
   // Dev server blocks /_next assets for non-localhost origins; production builds are unaffected.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "*.local", ...(process.env.ALLOWED_DEV_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) ?? [])],
   // Friendly public URLs backed by the existing pages. Old URLs keep working.

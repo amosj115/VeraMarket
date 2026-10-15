@@ -71,28 +71,33 @@ test("private listing creation API rejects an unauthenticated request", async ({
   expect(response.status()).toBe(401);
 });
 
-test("trending supports likes and saved listings for an authenticated user", async ({ page }) => {
-  const trendingEmail = `e2e-trending-${runId}@example.test`;
-  const trendingUsername = `trend_${runId.replaceAll("-", "").slice(0, 20)}`;
-  const trendingTitle = `Trending E2E listing ${runId.slice(0, 8)}`;
+test("legacy trending URL redirects to the marketplace", async ({ page }) => {
+  await page.goto("/trending");
+  await expect(page).toHaveURL(/\/marketplace$/);
+});
+
+test("marketplace users can keep liked and saved listings in their account", async ({ page }) => {
+  const marketplaceEmail = `e2e-marketplace-${runId}@example.test`;
+  const marketplaceUsername = `market_${runId.replaceAll("-", "").slice(0, 20)}`;
+  const marketplaceTitle = `Marketplace E2E listing ${runId.slice(0, 8)}`;
 
   await page.goto("/register");
-  await page.getByLabel("Full name").fill("E2E Trending User");
-  await page.getByLabel("Username").fill(trendingUsername);
-  await page.getByLabel("Email").fill(trendingEmail);
+  await page.getByLabel("Full name").fill("E2E Marketplace User");
+  await page.getByLabel("Username").fill(marketplaceUsername);
+  await page.getByLabel("Email").fill(marketplaceEmail);
   await page.getByLabel("Password").fill("TestPassword123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/onboarding\/profile$/);
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { email: trendingEmail }, select: { id: true } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { email: marketplaceEmail }, select: { id: true } });
   const category = await prisma.category.findFirstOrThrow({ where: { domain: "MARKETPLACE", isEnabled: true } });
   const listing = await prisma.listing.create({
     data: {
       sellerId: user.id,
       categoryId: category.id,
-      title: trendingTitle,
-      slug: `trending-e2e-${runId.slice(0, 12)}`,
-      description: "Active test listing for the trending feed.",
+      title: marketplaceTitle,
+      slug: `marketplace-e2e-${runId.slice(0, 12)}`,
+      description: "Active test listing for marketplace and account coverage.",
       priceCents: 150000,
       condition: "GOOD",
       location: "Cape Town",
@@ -101,24 +106,33 @@ test("trending supports likes and saved listings for an authenticated user", asy
   });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/trending");
-  await expect(page.getByRole("heading", { name: "Trending for You" })).toBeVisible();
-  await expect(page.getByRole("link", { name: trendingTitle, exact: true })).toBeVisible();
+  const searchActivityResponsePromise = page.waitForResponse((response) =>
+    response.url().includes("/api/search-activity") && response.request().method() === "POST"
+  );
+  await page.goto(`/marketplace?q=${encodeURIComponent(marketplaceTitle)}`);
+  const searchActivityResponse = await searchActivityResponsePromise;
+  expect(searchActivityResponse.ok()).toBeTruthy();
+  await expect.poll(() => prisma.searchActivity.findFirst({
+    where: { userId: user.id, query: marketplaceTitle.toLowerCase() },
+    select: { id: true },
+  })).not.toBeNull();
+  const listingLink = page.locator(`a[href="/listing/${listing.slug}"]`);
+  await expect(listingLink).toBeVisible();
   const fitsMobile = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(fitsMobile).toBeTruthy();
-  const likeButton = page.getByRole("button", { name: /Like ·/ });
-  await likeButton.click();
-  await expect(page.getByRole("button", { name: /Liked · 1/ })).toBeVisible();
-  await page.getByRole("button", { name: /Save ·/ }).click();
-  await expect(page.getByRole("button", { name: /Saved ·/ })).toBeVisible();
+  await listingLink.click();
+  await page.getByRole("button", { name: "Save listing" }).click();
+  await expect(page.getByText("Saved to favorites")).toBeVisible();
+  await page.getByRole("button", { name: /Like listing/ }).click();
+  await expect(page.getByRole("button", { name: /Unlike listing/ })).toBeVisible();
 
   await page.goto("/profile/liked");
-  await expect(page.getByText(trendingTitle)).toBeVisible();
+  await expect(page.getByText(marketplaceTitle)).toBeVisible();
   expect(await prisma.listingLike.findUnique({ where: { userId_listingId: { userId: user.id, listingId: listing.id } } })).toBeTruthy();
   await page.getByRole("button", { name: "Unlike" }).click();
   await expect(page.getByText("No liked listings yet")).toBeVisible();
   await page.goto("/profile/saved");
-  await expect(page.getByText(trendingTitle)).toBeVisible();
+  await expect(page.getByText(marketplaceTitle)).toBeVisible();
   expect(await prisma.favorite.findUnique({ where: { userId_listingId: { userId: user.id, listingId: listing.id } } })).toBeTruthy();
   await page.getByRole("button", { name: "Remove from favorites" }).click();
   await expect(page.getByText("No saved listings yet")).toBeVisible();

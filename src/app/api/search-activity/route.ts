@@ -34,7 +34,5 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Trending notifications are generated server-side on a schedule (see
-  // /api/trending/notify), not when a user happens to search or visit the marketplace.
   return NextResponse.json({ recorded: true });
 }

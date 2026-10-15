@@ -5,7 +5,7 @@ import { AccountManagement } from "@/components/admin/account-management";
 
 export const dynamic = "force-dynamic";
 
-// Account management is ADMIN-only, consistent with /admin/config and /admin/trending.
+// Account management is ADMIN-only, consistent with /admin/config.
 export default async function AdminAccountsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await auth();
   if (!session?.user || session.user.role !== "ADMIN") redirect("/");

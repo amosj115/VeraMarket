@@ -1,6 +1,5 @@
 import "./db-guard";
 import { PrismaClient } from "@prisma/client";
-import { getTrendingPage } from "@/lib/trending";
 import { getNotificationSummary, getUnreadTotals } from "@/lib/notification-groups";
 
 // Performance baseline tool for the *_test database (db-guard enforced).
@@ -27,24 +26,18 @@ async function main() {
   const user = await prisma.user.findFirst({ where: { username: { startsWith: "perftest_user_0" } }, select: { id: true } });
   const conv = await prisma.conversation.findFirst({ where: { userAId: user!.id }, select: { id: true } });
 
-  // 1. Trending pipeline (homepage + /trending + /api/trending).
-  const t1 = await timeIt("getTrendingPage(cold)", () => getTrendingPage());
-  const t2 = await timeIt("getTrendingPage(warm)", () => getTrendingPage());
-  const t3 = await timeIt("getTrendingPage(user)", () => getTrendingPage(user!.id));
-  report.trending = { coldMs: t1.ms, warmMs: t2.ms, userMs: t3.ms, items: t1.result.items.length };
-
-  // 2. Notification badge/summary (polled by the bell).
+  // 1. Notification badge/summary (polled by the bell).
   const u1 = await timeIt("getUnreadTotals", () => getUnreadTotals(user!.id));
   const u2 = await timeIt("getNotificationSummary", () => getNotificationSummary(user!.id));
   report.notifications = { unreadTotalsMs: u1.ms, summaryMs: u2.ms, totalUnread: u1.result.totalUnread };
 
-  // 3. Marketplace search: the two queries /api/listings runs per page.
+  // 2. Marketplace search: the two queries /api/listings runs per page.
   const where = { status: "ACTIVE" as const, OR: [{ title: { contains: "phone", mode: "insensitive" as const } }, { description: { contains: "phone", mode: "insensitive" as const } }] };
   const m1 = await timeIt("listings.findMany(ILIKE)", () => prisma.listing.findMany({ where, orderBy: { createdAt: "desc" as const }, skip: 0, take: 24, include: { images: { take: 1, orderBy: { sortOrder: "asc" as const } }, category: { select: { name: true, slug: true } } } }));
   const m2 = await timeIt("listings.count(ILIKE)", () => prisma.listing.count({ where }));
   report.marketplace = { findManyMs: m1.ms, countMs: m2.ms, rows: m1.result.length, total: m2.result, payloadBytes: bytes(m1.result) };
 
-  // 4. Unbounded public list endpoints.
+  // 3. Unbounded public list endpoints.
   const s1 = await timeIt("services.findMany(all)", () => prisma.serviceListing.findMany({ where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" }, include: { category: true } }));
   const s2 = await timeIt("properties.findMany(all)", () => prisma.propertyListing.findMany({ where: { status: "ACTIVE" }, orderBy: { createdAt: "desc" } }));
   const s3 = await timeIt("conversations.findMany(user)", () => prisma.conversation.findMany({ where: { OR: [{ userAId: user!.id }, { userBId: user!.id }] }, include: { userA: true, userB: true, listing: true, messages: { orderBy: { createdAt: "desc" }, take: 1 } } }));
@@ -54,11 +47,11 @@ async function main() {
     conversationsMs: s3.ms, conversationsBytes: bytes(s3.result), conversationsRows: s3.result.length,
   };
 
-  // 5. Message history (polled per open conversation).
+  // 4. Message history (polled per open conversation).
   const msg = await timeIt("messages.findMany(conversation)", () => prisma.message.findMany({ where: { conversationId: conv!.id }, orderBy: { createdAt: "asc" }, include: { sender: { select: { id: true, displayName: true, username: true } } } }));
   report.messages = { ms: msg.ms, rows: msg.result.length, payloadBytes: bytes(msg.result) };
 
-  // 6. EXPLAIN ANALYZE for index-coverage questions (SQL text mirrors the Prisma queries).
+  // 5. EXPLAIN ANALYZE for index-coverage questions (SQL text mirrors the Prisma queries).
   const explain = async (sql: string) => {
     try {
       const rows = await prisma.$queryRawUnsafe<{ ["QUERY PLAN"]: string }[]>(sql);

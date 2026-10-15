@@ -1,6 +1,5 @@
 export const PRIMARY_NAV = [
   { label: "Marketplace", href: "/marketplace" },
-  { label: "Trending", href: "/trending" },
   { label: "Virtual Shop", href: "/shops" },
   { label: "Services", href: "/services" },
   { label: "Real Estate", href: "/real-estate" },

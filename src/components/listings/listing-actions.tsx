@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-export function ListingActions({ listingId, title, priceCents }: { listingId: string; title: string; priceCents: number }) {
+export function ListingActions({ listingId, title, priceCents, initialLiked, initialLikeCount }: { listingId: string; title: string; priceCents: number; initialLiked: boolean; initialLikeCount: number }) {
   const { data: session } = useSession();
   const router = useRouter();
   const [message, setMessage] = useState("Hi, I'm interested in this item. Is it still available?");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [liked, setLiked] = useState(initialLiked);
+  const [likeCount, setLikeCount] = useState(initialLikeCount);
   const [offerAmount, setOfferAmount] = useState("");
   const [offerError, setOfferError] = useState<string | null>(null);
 
@@ -27,6 +29,21 @@ export function ListingActions({ listingId, title, priceCents }: { listingId: st
     const response = await fetch(`/api/listings/${listingId}/favorite`, { method: "POST" });
     const data = await response.json();
     setStatus(response.ok ? (data.favorited ? "Saved to favorites" : "Removed from favorites") : data.error);
+    setBusy(false);
+  }
+
+  async function toggleLike() {
+    if (!session) return router.push(`/login?callbackUrl=${encodeURIComponent(location.pathname)}`);
+    setBusy(true);
+    const response = await fetch(`/api/listings/${listingId}/like`, { method: "POST" });
+    const data = await response.json();
+    if (response.ok) {
+      setLiked(data.liked);
+      setLikeCount(data.count);
+      setStatus(data.liked ? "Added to liked listings" : "Removed from liked listings");
+    } else {
+      setStatus(data.error ?? "Could not update like.");
+    }
     setBusy(false);
   }
 
@@ -107,6 +124,9 @@ export function ListingActions({ listingId, title, priceCents }: { listingId: st
           Contact seller
         </button>
       </div>
+      <button type="button" onClick={toggleLike} disabled={busy} aria-pressed={liked} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-slate-700 hover:border-brand hover:text-brand disabled:opacity-60">
+        {liked ? "Unlike listing" : "Like listing"} · {likeCount}
+      </button>
       <textarea
         id="message-box"
         value={message}

@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { formatZAR } from "@/lib/utils";
 import { cdnImage } from "@/lib/image-url";
 import { SaveSearchButton } from "@/components/searches/save-search-button";
-import { SearchActivityRecorder } from "@/components/trending/search-activity-recorder";
+import { SearchActivityRecorder } from "@/components/searches/search-activity-recorder";
 import { Greeting } from "@/components/home/greeting";
 
 const RADIUS_OPTIONS = [10, 20, 50, 60, 70, 100];

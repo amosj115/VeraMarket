@@ -104,7 +104,7 @@ export function SystemNotificationCenter() {
         <div className="mt-3 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Vera Market Updates</h1>
-            <p className="mt-1 text-sm text-slate-500">Achievements, trending listings, boosts, and account updates.</p>
+            <p className="mt-1 text-sm text-slate-500">Search matches, achievements, boosts, and account updates.</p>
           </div>
           <button type="button" onClick={markAllRead} disabled={unread === 0} className="shrink-0 text-sm font-semibold text-brand disabled:text-slate-300">
             Mark all as read
@@ -135,7 +135,7 @@ export function SystemNotificationCenter() {
         ) : items.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-base font-semibold text-foreground">{filter === "unread" ? "No unread updates" : "No updates yet"}</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">Achievements, trending listings, and account updates from Vera Market will appear here.</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">Search matches, achievements, and account updates from Vera Market will appear here.</p>
           </div>
         ) : (
           <ul className="divide-y divide-border">
