@@ -55,7 +55,7 @@ export async function getTrendingFeedPage(cursor?: TrendingCursor): Promise<Tren
 
   const hasMore = rows.length > TRENDING_FEED_PAGE_SIZE;
   const pageRows = rows.slice(0, TRENDING_FEED_PAGE_SIZE);
-  const last = pageRows[pageRows.length - 1];
+  const last = pageRows.length > 0 ? pageRows[pageRows.length - 1] : null;
 
   return {
     items: pageRows.map((listing) => ({
