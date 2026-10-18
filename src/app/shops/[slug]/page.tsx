@@ -17,6 +17,7 @@ import { cardMetadata, getShareCard, unavailableMetadata } from "@/lib/share-met
 import { ShareButton } from "@/components/share/share-button";
 import { SharedLinkTracker } from "@/components/share/shared-link-tracker";
 import { ShopChatButton } from "@/components/share/shop-chat-button";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ShopDetailPage({ params, searchParams }: { params:
 			products: { where: { isAvailable: true }, orderBy: { createdAt: "desc" }, include: { images: { orderBy: { sortOrder: "asc" } }, category: true } },
 			categories: { orderBy: { sortOrder: "asc" } },
 			subscription: true,
-			owner: { select: { id: true, displayName: true, username: true, profileVerification: true } },
+			owner: { select: { id: true, displayName: true, username: true, profileVerification: true, status: true } },
 		},
 	});
 	if (!shop || !isShopVisible(shop)) notFound();
@@ -47,7 +48,7 @@ export default async function ShopDetailPage({ params, searchParams }: { params:
 	const [trust, achievements, sellerListings] = await Promise.all([
 		getTrust(shop.owner.id),
 		listAchievements(shop.owner.id),
-		prisma.listing.findMany({ where: { sellerId: shop.owner.id, status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, slug: true, title: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } }),
+		prisma.listing.findMany({ where: { ...publicListingWhere(), sellerId: shop.owner.id }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, slug: true, title: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } }),
 	]);
 	const earned = achievements.filter((item) => item.awardedAt);
 	const url = publicUrl(appUrl(), "SHOP", shop.slug);

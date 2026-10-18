@@ -5,6 +5,35 @@ import { publicListingWhere } from "@/lib/listing-visibility";
 
 export const TRENDING_FEED_PAGE_SIZE = 8;
 
+function createTrendingFeedSelect() {
+  return {
+    id: true,
+    slug: true,
+    title: true,
+    priceCents: true,
+    condition: true,
+    location: true,
+    areaName: true,
+    createdAt: true,
+    images: {
+      orderBy: { sortOrder: "asc" },
+      select: { url: true },
+    },
+    seller: { select: { id: true, displayName: true, username: true, avatarUrl: true } },
+    boosts: {
+      where: { status: "ACTIVE", expiresAt: { gt: new Date() } },
+      take: 1,
+      select: { id: true },
+    },
+  } satisfies Prisma.ListingSelect;
+}
+
+type TrendingFeedQueryRow = Prisma.ListingGetPayload<{ select: ReturnType<typeof createTrendingFeedSelect> }>;
+
+export type TrendingFeedQuery = (
+  args: Prisma.ListingFindManyArgs & { select: ReturnType<typeof createTrendingFeedSelect> },
+) => Promise<TrendingFeedQueryRow[]>;
+
 export type TrendingFeedItem = {
   id: string;
   slug: string;
@@ -13,8 +42,12 @@ export type TrendingFeedItem = {
   condition: string;
   location: string;
   areaName: string | null;
-  imageUrl: string | null;
+  images: Array<{ url: string }>;
+  sellerId: string | null;
   sellerName: string | null;
+  sellerUsername: string | null;
+  sellerAvatarUrl: string | null;
+  boosted: boolean;
 };
 
 export type TrendingFeedPage = {
@@ -22,8 +55,12 @@ export type TrendingFeedPage = {
   nextCursor: string | null;
 };
 
-export async function getTrendingFeedPage(cursor?: TrendingCursor): Promise<TrendingFeedPage> {
+export async function getTrendingFeedPage(
+  cursor?: TrendingCursor,
+  findListings: TrendingFeedQuery = (args) => prisma.listing.findMany(args),
+): Promise<TrendingFeedPage> {
   const where: Prisma.ListingWhereInput = publicListingWhere();
+
   if (cursor) {
     where.OR = [
       { createdAt: { lt: cursor.createdAt } },
@@ -31,26 +68,11 @@ export async function getTrendingFeedPage(cursor?: TrendingCursor): Promise<Tren
     ];
   }
 
-  const rows = await prisma.listing.findMany({
+  const rows = await findListings({
     where,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: TRENDING_FEED_PAGE_SIZE + 1,
-    select: {
-      id: true,
-      slug: true,
-      title: true,
-      priceCents: true,
-      condition: true,
-      location: true,
-      areaName: true,
-      createdAt: true,
-      images: {
-        take: 1,
-        orderBy: { sortOrder: "asc" },
-        select: { url: true },
-      },
-      seller: { select: { displayName: true } },
-    },
+    select: createTrendingFeedSelect(),
   });
 
   const hasMore = rows.length > TRENDING_FEED_PAGE_SIZE;
@@ -66,8 +88,12 @@ export async function getTrendingFeedPage(cursor?: TrendingCursor): Promise<Tren
       condition: listing.condition,
       location: listing.location,
       areaName: listing.areaName,
-      imageUrl: listing.images[0]?.url ?? null,
+      images: listing.images,
+      sellerId: listing.seller.id || null,
       sellerName: listing.seller.displayName || null,
+      sellerUsername: listing.seller.username || null,
+      sellerAvatarUrl: listing.seller.avatarUrl || null,
+      boosted: listing.boosts.length > 0,
     })),
     nextCursor: hasMore && last
       ? encodeTrendingCursor({ createdAt: last.createdAt, id: last.id })

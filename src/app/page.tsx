@@ -140,8 +140,37 @@ function CategoryCardGrid({
 }
 
 async function HomepageListings() {
-  const { listings } = await getListings({ page: 1 });
-  const items = listings.slice(0, 8);
+  const boosted = await prisma.boost.findMany({
+    where: { status: "ACTIVE", listingId: { not: null }, expiresAt: { gt: new Date() } },
+    include: {
+      listing: {
+        where: { status: "ACTIVE", seller: { is: { status: "ACTIVE" } } },
+        include: {
+          images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } },
+          category: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 4,
+  });
+
+  const boostedListings = boosted
+    .filter((b) => b.listing)
+    .map((b) => ({ ...b.listing!, boosted: true }));
+
+  const remaining = Math.max(0, 4 - boostedListings.length);
+  let ordinaryListings: Awaited<ReturnType<typeof getListings>>["listings"] = [];
+  if (remaining > 0) {
+    const result = await getListings({ page: 1 });
+    const boostedIds = new Set(boostedListings.map((l) => l.id));
+    ordinaryListings = result.listings
+      .filter((l) => !boostedIds.has(l.id))
+      .slice(0, remaining)
+      .map((l) => ({ ...l, boosted: false }));
+  }
+
+  const items = [...boostedListings, ...ordinaryListings].slice(0, 4);
 
   if (items.length === 0) {
     return (
@@ -153,21 +182,20 @@ async function HomepageListings() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {items.map((listing, index) => (
         <article key={listing.id} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
           <Link href={`/listing/${listing.slug}`} aria-label={`View listing ${listing.title}`} className="block">
             <div className="relative aspect-square bg-slate-100">
               <div className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
                 {listing.boosted && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-amber-950">Boosted</span>}
-                {listing.store && <span className="truncate rounded-full bg-brand px-2 py-0.5 text-[10px] font-semibold text-white">Available in Virtual Store</span>}
               </div>
               {listing.images[0] ? (
                 <Image
                   src={cdnImage(listing.images[0].url, 640)}
                   alt={listing.title}
                   fill
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  sizes="(max-width: 640px) 50vw, 25vw"
                   preload={index === 0}
                   className="object-cover"
                 />
@@ -181,9 +209,6 @@ async function HomepageListings() {
               <p className="mt-1 truncate text-xs text-slate-500">{listing.areaName || listing.location} · {listing.category.name}</p>
             </div>
           </Link>
-          <div className="px-3 pb-3">
-            <FavoriteToggle targetType="LISTING" targetId={listing.id} />
-          </div>
         </article>
       ))}
     </div>
@@ -192,8 +217,8 @@ async function HomepageListings() {
 
 function HomepageListingsSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="Loading listings">
-      {[...Array(8)].map((_, index) => (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Loading listings">
+      {[...Array(4)].map((_, index) => (
         <div key={index} className="overflow-hidden rounded-lg border border-border bg-white animate-pulse">
           <div className="aspect-square bg-slate-200" />
           <div className="space-y-2 p-3">

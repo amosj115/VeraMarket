@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
+import { publicServiceWhere } from "@/lib/content-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
 	const [categories, services] = await Promise.all([
 		prisma.category.findMany({ where: { domain: "SERVICE", isEnabled: true }, orderBy: { sortOrder: "asc" } }),
 		prisma.serviceListing.findMany({
-			where: { status: "ACTIVE", ...(query ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }, { serviceArea: { contains: query, mode: "insensitive" } }] } : {}), ...(category ? { category: { slug: category } } : {}) },
+			where: { ...publicServiceWhere(), ...(query ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }, { serviceArea: { contains: query, mode: "insensitive" } }] } : {}), ...(category ? { category: { slug: category } } : {}) },
 			orderBy: { createdAt: "desc" }, take: 48, include: { category: true, provider: { select: { username: true, displayName: true, identityVerification: true } } },
 		}),
 	]);

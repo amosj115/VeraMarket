@@ -17,6 +17,7 @@ import { VerifiedBadge } from "@/components/profile/verified-badge";
 import { ShareButton } from "@/components/share/share-button";
 import { SharedLinkTracker } from "@/components/share/shared-link-tracker";
 import { cdnImage } from "@/lib/image-url";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +33,14 @@ const cardClass = "overflow-hidden rounded-lg border border-border bg-white hove
 
 export default async function ListingPage({ params }: Props) {
   const { slug } = await params;
-  const listing = await prisma.listing.findUnique({
-    where: { slug },
+  const listing = await prisma.listing.findFirst({
+    where: {
+      slug,
+      OR: [
+        { status: { in: ["SOLD", "REMOVED"] } },
+        { ...publicListingWhere() },
+      ],
+    },
     include: {
       images: { orderBy: { sortOrder: "asc" } },
       category: true,
@@ -50,7 +57,7 @@ export default async function ListingPage({ params }: Props) {
   // other, so all three run in parallel instead of three sequential round trips.
   const [related, trust, store, existingLike] = await Promise.all([
     prisma.listing.findMany({
-      where: { status: "ACTIVE", categoryId: listing.categoryId, id: { not: listing.id } },
+      where: { ...publicListingWhere(), categoryId: listing.categoryId, id: { not: listing.id } },
       orderBy: { createdAt: "desc" },
       take: 4,
       select: { id: true, slug: true, title: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },

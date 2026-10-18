@@ -3,6 +3,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyContentPublished, safeNotify } from "@/lib/notifications";
+import { moderatePendingListing } from "@/lib/listing-moderation";
+import { moderatePendingEntity } from "@/lib/entity-moderation";
 
 const moderationSchema = z.object({
   targetType: z.enum(["LISTING", "SHOP", "SERVICE", "PROPERTY"]),
@@ -33,30 +35,18 @@ export async function PATCH(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid moderation decision" }, { status: 400 });
   const { targetType, targetId, decision } = parsed.data;
   const status = decision === "APPROVE" ? "ACTIVE" : "REJECTED";
-  let ownerId: string | undefined;
-  let title = "Content";
-
-  if (targetType === "LISTING") {
-    const record = await prisma.listing.findFirst({ where: { id: targetId, status: "PENDING_REVIEW" }, select: { sellerId: true, title: true } });
-    if (!record) return NextResponse.json({ error: "Pending listing not found" }, { status: 404 });
-    ownerId = record.sellerId; title = record.title;
-    await prisma.listing.update({ where: { id: targetId }, data: { status } });
-  } else if (targetType === "SHOP") {
-    const record = await prisma.shop.findFirst({ where: { id: targetId, status: "PENDING_REVIEW" }, select: { ownerId: true, name: true } });
-    if (!record) return NextResponse.json({ error: "Pending shop not found" }, { status: 404 });
-    ownerId = record.ownerId; title = record.name;
-    await prisma.shop.update({ where: { id: targetId }, data: { status } });
-  } else if (targetType === "SERVICE") {
-    const record = await prisma.serviceListing.findFirst({ where: { id: targetId, status: "PENDING_REVIEW" }, select: { providerId: true, title: true } });
-    if (!record) return NextResponse.json({ error: "Pending service not found" }, { status: 404 });
-    ownerId = record.providerId; title = record.title;
-    await prisma.serviceListing.update({ where: { id: targetId }, data: { status } });
-  } else {
-    const record = await prisma.propertyListing.findFirst({ where: { id: targetId, status: "PENDING_REVIEW" }, select: { ownerId: true, title: true } });
-    if (!record) return NextResponse.json({ error: "Pending property not found" }, { status: 404 });
-    ownerId = record.ownerId; title = record.title;
-    await prisma.propertyListing.update({ where: { id: targetId }, data: { status } });
+  const result = targetType === "LISTING"
+    ? await prisma.$transaction((tx) => moderatePendingListing(tx, targetId, decision), { isolationLevel: "ReadCommitted" })
+    : await prisma.$transaction((tx) => moderatePendingEntity(tx, targetType, targetId, decision), { isolationLevel: "ReadCommitted" });
+  if (result.kind === "not-found") return NextResponse.json({ error: `Pending ${targetType.toLowerCase()} not found` }, { status: 404 });
+  if (result.kind === "seller-ineligible") {
+    return NextResponse.json({ error: `The seller is not eligible to publish this ${targetType.toLowerCase()}.` }, { status: 409 });
   }
+  if (result.kind === "conflict") {
+    return NextResponse.json({ error: `This ${targetType.toLowerCase()} changed during moderation. Reload and try again.` }, { status: 409 });
+  }
+  const ownerId = result.sellerId;
+  const title = result.title;
 
   await prisma.$transaction([
     prisma.notification.create({ data: { userId: ownerId!, type: decision === "APPROVE" ? "LISTING_APPROVED" : "LISTING_REJECTED", title: decision === "APPROVE" ? "Submission approved" : "Submission needs changes", body: decision === "APPROVE" ? `"${title}" is now public on Vera Market.` : `"${title}" was not approved. Please review it and submit an updated version.` } }),

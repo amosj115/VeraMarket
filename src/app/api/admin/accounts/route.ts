@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { adminDeleteAccountSchema, adminHoldSchema, adminLiftHoldSchema, adminReviewFlagSchema } from "@/lib/validation/account";
-import { anonymizeAccount, countActiveAdmins, deleteSolelyOwnedData, restrictOwnedContent, restoreHeldContent } from "@/lib/account-lifecycle";
+import { accountHoldStatusError, anonymizeAccount, deleteSolelyOwnedData, liftAccountHold, lockAccountForAdminLifecycle, placeAccountHold, restrictOwnedContent } from "@/lib/account-lifecycle";
 import { hashEmailLegacy } from "@/lib/account-security";
 import { escapeHtml } from "@/lib/email";
 
@@ -74,26 +74,14 @@ export async function POST(request: NextRequest) {
 
   if (userId === actorId) return NextResponse.json({ error: "You cannot place a hold on your own account." }, { status: 400 });
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, status: true, role: true } });
-  if (!target) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-  if (target.status === "DEACTIVATED") return NextResponse.json({ error: "This account is already deleted." }, { status: 400 });
-  if (await prisma.accountHold.count({ where: { userId, active: true } }) > 0) {
-    return NextResponse.json({ error: "This account already has an active hold." }, { status: 400 });
-  }
-  // Never lock out the last remaining administrator.
-  if (target.role === "ADMIN" && (await countActiveAdmins()) <= 1) {
-    return NextResponse.json({ error: "This is the last active administrator; it cannot be held." }, { status: 400 });
-  }
-
   try {
-    await prisma.$transaction(async (tx) => {
-      const held = await restrictOwnedContent(tx, userId);
-      await tx.accountHold.create({
-        data: { userId, reason, placedById: actorId, heldListingIds: held.listingIds, heldShopIds: held.shopIds, heldServiceIds: held.serviceIds, heldPropertyIds: held.propertyIds },
-      });
-      await tx.user.update({ where: { id: userId }, data: { status: "SUSPENDED" } });
-      await tx.auditLog.create({ data: { actorId, action: "ACCOUNT_HOLD_PLACED", targetType: "USER", targetId: userId, metadata: { reason } } });
-    });
+    const result = await prisma.$transaction(async (tx) => {
+      return placeAccountHold(tx, userId, actorId, reason);
+    }, { isolationLevel: "ReadCommitted" });
+    if (result.kind === "not-found") return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    if (result.kind === "already-held") return NextResponse.json({ error: "This account already has an active hold." }, { status: 400 });
+    if (result.kind === "last-active-admin") return NextResponse.json({ error: "This is the last active administrator; it cannot be held." }, { status: 400 });
+    if (result.kind === "ineligible") return NextResponse.json({ error: accountHoldStatusError(result.status) }, { status: result.status === "DEACTIVATED" ? 400 : 409 });
   } catch {
     return NextResponse.json({ error: "Could not place the hold. Nothing was changed." }, { status: 500 });
   }
@@ -101,8 +89,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ held: true });
 }
 
-// Lift a hold. Restores only the content this hold hid (skipping anything independently
-// moderated in the meantime) and re-activates the account unless another hold is active.
+// Lift a hold. Restore its content only when no other hold remains and the account is
+// still in a status that can legitimately resume. A ban or deletion keeps the content hidden.
 export async function PATCH(request: NextRequest) {
   const session = await adminOnly();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -149,21 +137,15 @@ export async function PATCH(request: NextRequest) {
   const { userId } = parsed.data;
   const actorId = session.user.id;
 
-  const hold = await prisma.accountHold.findFirst({ where: { userId, active: true }, orderBy: { placedAt: "desc" } });
+  const hold = await prisma.accountHold.findFirst({ where: { userId, active: true }, orderBy: [{ placedAt: "desc" }, { id: "desc" }] });
   if (!hold) return NextResponse.json({ error: "No active hold on this account." }, { status: 404 });
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await restoreHeldContent(tx, hold);
-      await tx.accountHold.update({ where: { id: hold.id }, data: { active: false, liftedById: actorId, liftedAt: new Date() } });
-      // Only re-activate if no other hold is still open on this account.
-      const remaining = await tx.accountHold.count({ where: { userId, active: true, id: { not: hold.id } } });
-      if (remaining === 0) {
-        const target = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
-        if (target?.status === "SUSPENDED") await tx.user.update({ where: { id: userId }, data: { status: "ACTIVE" } });
-      }
-      await tx.auditLog.create({ data: { actorId, action: "ACCOUNT_HOLD_LIFTED", targetType: "USER", targetId: userId } });
-    });
+    const result = await prisma.$transaction(
+      (tx) => liftAccountHold(tx, userId, hold.id, actorId),
+      { isolationLevel: "ReadCommitted" },
+    );
+    if (result === "changed") return NextResponse.json({ error: "This account hold has already been lifted." }, { status: 409 });
   } catch {
     return NextResponse.json({ error: "Could not lift the hold. Nothing was changed." }, { status: 500 });
   }
@@ -190,17 +172,13 @@ export async function DELETE(request: NextRequest) {
   // Prevent accidental self-deletion through the admin path.
   if (userId === actorId) return NextResponse.json({ error: "You cannot delete your own account from the admin panel." }, { status: 400 });
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, status: true, email: true } });
-  if (!target) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-  if (target.status === "DEACTIVATED") return NextResponse.json({ error: "This account is already deleted." }, { status: 400 });
-  if (target.role === "ADMIN" && (await countActiveAdmins()) <= 1) {
-    return NextResponse.json({ error: "This is the last active administrator; it cannot be deleted." }, { status: 400 });
-  }
-
-  const originalEmail = target.email;
-
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      const guarded = await lockAccountForAdminLifecycle(tx, userId);
+      if (guarded.kind !== "ready") return guarded.kind;
+      const target = guarded.target;
+      if (target.status === "DEACTIVATED") return "already-deactivated" as const;
+
       // Close any open holds so no dangling active hold outlives the account.
       await tx.accountHold.updateMany({ where: { userId, active: true }, data: { active: false, liftedAt: new Date() } });
       await restrictOwnedContent(tx, userId);
@@ -210,7 +188,7 @@ export async function DELETE(request: NextRequest) {
       // Record deletion with reason and email hash for repeat-offender detection.
       await tx.deletedAccountRecord.create({
         data: {
-          emailHash: hashEmailLegacy(originalEmail),
+          emailHash: hashEmailLegacy(target.email),
           reason,
           customReason,
           deletedByUserId: actorId,
@@ -222,7 +200,7 @@ export async function DELETE(request: NextRequest) {
       const reasonLabel = customReason ? `${reason} (${customReason})` : reason;
       await tx.notificationJob.create({
         data: {
-          recipientEmail: originalEmail,
+          recipientEmail: target.email,
           subject: "Account Deactivation Notice",
           text: `Your Vera Market account has been deactivated. Reason: ${reasonLabel}. You may register a new account, but it may be subject to additional review. Contact support if you believe this is an error.`,
           html: `<p>Your Vera Market account has been deactivated.</p><p><strong>Reason:</strong> ${escapeHtml(reasonLabel)}</p><p>You may register a new account, but it may be subject to additional verification or review.</p><p>If you believe this is an error, please contact our support team.</p>`,
@@ -238,7 +216,12 @@ export async function DELETE(request: NextRequest) {
           metadata: { reason, customReason }
         }
       });
-    });
+      return "deleted" as const;
+    }, { isolationLevel: "ReadCommitted" });
+
+    if (result === "not-found") return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    if (result === "already-deactivated") return NextResponse.json({ error: "This account is already deleted." }, { status: 400 });
+    if (result === "last-active-admin") return NextResponse.json({ error: "This is the last active administrator; it cannot be deleted." }, { status: 400 });
 
   } catch (err) {
     console.error("[admin-accounts] Deletion failed", err);

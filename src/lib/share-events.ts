@@ -1,23 +1,26 @@
 import { prisma } from "@/lib/prisma";
 import type { ShareTarget } from "@/lib/share";
+import { publicListingWhere } from "@/lib/listing-visibility";
+import { publicPropertyWhere, publicServiceWhere } from "@/lib/content-visibility";
+import { activeShopFilter } from "@/lib/shops";
 
 // Resolves the owner of public, active content. Returns null for anything that isn't publicly visible.
 export async function resolveShareTarget(type: ShareTarget, id: string): Promise<{ ownerId: string } | null> {
   switch (type) {
     case "LISTING": {
-      const row = await prisma.listing.findFirst({ where: { id, status: "ACTIVE" }, select: { sellerId: true } });
+      const row = await prisma.listing.findFirst({ where: { id, ...publicListingWhere() }, select: { sellerId: true } });
       return row ? { ownerId: row.sellerId } : null;
     }
     case "SHOP": {
-      const row = await prisma.shop.findFirst({ where: { id, status: "ACTIVE", isPaused: false }, select: { ownerId: true } });
+      const row = await prisma.shop.findFirst({ where: { id, ...activeShopFilter() }, select: { ownerId: true } });
       return row ? { ownerId: row.ownerId } : null;
     }
     case "SERVICE": {
-      const row = await prisma.serviceListing.findFirst({ where: { id, status: "ACTIVE" }, select: { providerId: true } });
+      const row = await prisma.serviceListing.findFirst({ where: { id, ...publicServiceWhere() }, select: { providerId: true } });
       return row ? { ownerId: row.providerId } : null;
     }
     case "PROPERTY": {
-      const row = await prisma.propertyListing.findFirst({ where: { id, status: "ACTIVE" }, select: { ownerId: true } });
+      const row = await prisma.propertyListing.findFirst({ where: { id, ...publicPropertyWhere() }, select: { ownerId: true } });
       return row ? { ownerId: row.ownerId } : null;
     }
     case "PROFILE": {

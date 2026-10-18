@@ -3,6 +3,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { activeShopFilter } from "@/lib/shops";
+import { publicListingWhere } from "@/lib/listing-visibility";
+import { publicPropertyWhere, publicServiceWhere } from "@/lib/content-visibility";
 
 const favoriteSchema = z.object({ targetType: z.enum(["LISTING", "SHOP", "SHOP_PRODUCT", "SERVICE", "PROPERTY"]), targetId: z.string().cuid() });
 
@@ -12,6 +14,16 @@ export async function GET(request: NextRequest) {
   const parsed = favoriteSchema.safeParse({ targetType: request.nextUrl.searchParams.get("targetType"), targetId: request.nextUrl.searchParams.get("targetId") });
   if (!parsed.success) return NextResponse.json({ error: "Invalid favorite request" }, { status: 400 });
   const { targetType, targetId } = parsed.data;
+  const target = targetType === "LISTING"
+    ? await prisma.listing.findFirst({ where: { id: targetId, ...publicListingWhere() }, select: { id: true } })
+    : targetType === "SHOP"
+      ? await prisma.shop.findFirst({ where: { id: targetId, ...activeShopFilter() }, select: { id: true } })
+      : targetType === "SHOP_PRODUCT"
+        ? await prisma.shopProduct.findFirst({ where: { id: targetId, isAvailable: true, shop: activeShopFilter() }, select: { id: true } })
+        : targetType === "SERVICE"
+          ? await prisma.serviceListing.findFirst({ where: { id: targetId, ...publicServiceWhere() }, select: { id: true } })
+          : await prisma.propertyListing.findFirst({ where: { id: targetId, ...publicPropertyWhere() }, select: { id: true } });
+  if (!target) return NextResponse.json({ favorited: false });
   const where = targetType === "LISTING" ? { userId: session.user.id, listingId: targetId } : targetType === "SHOP" ? { userId: session.user.id, shopId: targetId } : targetType === "SHOP_PRODUCT" ? { userId: session.user.id, shopProductId: targetId } : targetType === "SERVICE" ? { userId: session.user.id, serviceId: targetId } : { userId: session.user.id, propertyId: targetId };
   const favorite = await prisma.favorite.findFirst({ where });
   return NextResponse.json({ favorited: Boolean(favorite) });
@@ -25,7 +37,7 @@ export async function POST(request: NextRequest) {
   const { targetType, targetId } = parsed.data;
 
   if (targetType === "LISTING") {
-    const target = await prisma.listing.findFirst({ where: { id: targetId, status: "ACTIVE" }, select: { id: true } });
+    const target = await prisma.listing.findFirst({ where: { id: targetId, ...publicListingWhere() }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     const existing = await prisma.favorite.findFirst({ where: { userId: session.user.id, listingId: targetId } });
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
@@ -43,13 +55,13 @@ export async function POST(request: NextRequest) {
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
     await prisma.favorite.create({ data: { userId: session.user.id, shopProductId: targetId } });
   } else if (targetType === "SERVICE") {
-    const target = await prisma.serviceListing.findFirst({ where: { id: targetId, status: "ACTIVE" }, select: { id: true } });
+    const target = await prisma.serviceListing.findFirst({ where: { id: targetId, ...publicServiceWhere() }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "Service not found" }, { status: 404 });
     const existing = await prisma.favorite.findFirst({ where: { userId: session.user.id, serviceId: targetId } });
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }
     await prisma.favorite.create({ data: { userId: session.user.id, serviceId: targetId } });
   } else {
-    const target = await prisma.propertyListing.findFirst({ where: { id: targetId, status: "ACTIVE" }, select: { id: true } });
+    const target = await prisma.propertyListing.findFirst({ where: { id: targetId, ...publicPropertyWhere() }, select: { id: true } });
     if (!target) return NextResponse.json({ error: "Property not found" }, { status: 404 });
     const existing = await prisma.favorite.findFirst({ where: { userId: session.user.id, propertyId: targetId } });
     if (existing) { await prisma.favorite.delete({ where: { id: existing.id } }); return NextResponse.json({ favorited: false }); }

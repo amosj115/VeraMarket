@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { activeListingBoosts, listingWeight } from "@/lib/boosts";
 import { activeStoreOwners, type ActiveStore } from "@/lib/shops";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 // One query path for "browse listings", shared by the marketplace page's
 // server-rendered first paint and GET /api/listings. Keeping a single
@@ -78,7 +79,7 @@ export async function getListings(input: ListingQueryInput): Promise<{ listings:
   const sortByDistance = input.sortByDistance ?? false;
   const pageSize = PAGE_SIZE;
 
-  const where: Record<string, unknown> = { status: "ACTIVE" };
+  const where: Record<string, unknown> = publicListingWhere();
   if (q) {
     where.OR = [
       { title: { contains: q, mode: "insensitive" } },

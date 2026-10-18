@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { appUrl } from "@/lib/app-url";
 import { formatZAR } from "@/lib/utils";
 import { publicPath, type ShareTarget } from "@/lib/share";
+import { publicListingWhere } from "@/lib/listing-visibility";
+import { publicPropertyWhere, publicServiceWhere } from "@/lib/content-visibility";
+import { activeShopFilter } from "@/lib/shops";
 
 export type ShareCard = {
   target: ShareTarget;
@@ -21,23 +24,23 @@ export const absolute = (url: string | null | undefined) => (!url ? null : /^htt
 export async function getShareCard(target: Exclude<ShareTarget, "PROFILE">, slug: string): Promise<ShareCard | null> {
   switch (target) {
     case "LISTING": {
-      const row = await prisma.listing.findUnique({ where: { slug }, select: { title: true, description: true, priceCents: true, status: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, seller: { select: { displayName: true } } } });
-      if (!row || row.status !== "ACTIVE") return null;
+      const row = await prisma.listing.findFirst({ where: { slug, ...publicListingWhere() }, select: { title: true, description: true, priceCents: true, status: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, seller: { select: { displayName: true } } } });
+      if (!row) return null;
       return { target, title: row.title, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: formatZAR(row.priceCents), imageUrl: absolute(row.images[0]?.url), byline: `${row.seller.displayName} · ${row.location}`, path: publicPath(target, slug) };
     }
     case "SHOP": {
-      const row = await prisma.shop.findUnique({ where: { slug }, select: { name: true, description: true, status: true, isPaused: true, logoUrl: true, coverUrl: true, address: true, subscription: { select: { status: true, expiresAt: true } }, owner: { select: { displayName: true } } } });
-      if (!row || row.status !== "ACTIVE" || row.isPaused || row.subscription?.status !== "ACTIVE" || !row.subscription.expiresAt || row.subscription.expiresAt <= new Date()) return null;
+      const row = await prisma.shop.findFirst({ where: { slug, ...activeShopFilter() }, select: { name: true, description: true, logoUrl: true, coverUrl: true, owner: { select: { displayName: true } } } });
+      if (!row) return null;
       return { target, title: row.name, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: null, imageUrl: absolute(row.coverUrl ?? row.logoUrl), byline: `Virtual Shop by ${row.owner.displayName}`, path: publicPath(target, slug) };
     }
     case "SERVICE": {
-      const row = await prisma.serviceListing.findUnique({ where: { slug }, select: { title: true, description: true, priceCents: true, status: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, provider: { select: { displayName: true } } } });
-      if (!row || row.status !== "ACTIVE") return null;
+      const row = await prisma.serviceListing.findFirst({ where: { slug, ...publicServiceWhere() }, select: { title: true, description: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, provider: { select: { displayName: true } } } });
+      if (!row) return null;
       return { target, title: row.title, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: row.priceCents ? `From ${formatZAR(row.priceCents)}` : null, imageUrl: absolute(row.images[0]?.url), byline: `${row.provider.displayName} · ${row.location}`, path: publicPath(target, slug) };
     }
     case "PROPERTY": {
-      const row = await prisma.propertyListing.findUnique({ where: { slug }, select: { title: true, description: true, priceCents: true, status: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, owner: { select: { displayName: true } } } });
-      if (!row || row.status !== "ACTIVE") return null;
+      const row = await prisma.propertyListing.findFirst({ where: { slug, ...publicPropertyWhere() }, select: { title: true, description: true, priceCents: true, location: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } }, owner: { select: { displayName: true } } } });
+      if (!row) return null;
       return { target, title: row.title, description: clip(row.description.replace(/\s+/g, " "), 160), priceLabel: formatZAR(row.priceCents), imageUrl: absolute(row.images[0]?.url), byline: `${row.owner.displayName} · ${row.location}`, path: publicPath(target, slug) };
     }
   }

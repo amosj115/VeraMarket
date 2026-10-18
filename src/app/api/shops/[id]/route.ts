@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { shopUpdateSchema } from "@/lib/validation/shop";
 import { enforceReviewStatus } from "@/lib/review-enforcement";
+import { removeOwnedContent } from "@/lib/account-lifecycle";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -29,8 +30,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const shop = await prisma.shop.findFirst({ where: { id, ownerId: session.user.id }, select: { id: true } });
-  if (!shop) return NextResponse.json({ error: "Virtual Store not found" }, { status: 404 });
-  await prisma.shop.update({ where: { id }, data: { status: "REMOVED" } });
+  const result = await prisma.$transaction((tx) => removeOwnedContent(tx, "SHOP", session.user.id, id), { isolationLevel: "ReadCommitted" });
+  if (result === "account-ineligible") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (result === "not-found") return NextResponse.json({ error: "Virtual Store not found" }, { status: 404 });
+  if (result === "conflict") return NextResponse.json({ error: "This store changed while it was being removed. Reload and try again." }, { status: 409 });
   return NextResponse.json({ removed: true });
 }

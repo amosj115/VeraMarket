@@ -10,6 +10,8 @@ export async function GET(_request: Request, { params }: Context) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ following: false });
   const { id } = await params;
+  const shop = await prisma.shop.findFirst({ where: { id, ...activeShopFilter() }, select: { id: true } });
+  if (!shop) return NextResponse.json({ following: false });
   const follow = await prisma.shopFollower.findUnique({ where: { userId_shopId: { userId: session.user.id, shopId: id } }, select: { id: true } });
   return NextResponse.json({ following: Boolean(follow) });
 }

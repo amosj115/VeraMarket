@@ -2,6 +2,8 @@ import type { NotificationType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatZAR } from "@/lib/utils";
 import { activeShopFilter } from "@/lib/shops";
+import { publicListingWhere } from "@/lib/listing-visibility";
+import { publicPropertyWhere, publicServiceWhere } from "@/lib/content-visibility";
 
 const SEARCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const SEARCH_SCAN_LIMIT = 5000;
@@ -111,7 +113,7 @@ async function followerIds(sellerId: string) {
 
 async function notifyListing(id: string) {
   const listing = await prisma.listing.findFirst({
-    where: { id, status: "ACTIVE" },
+    where: { id, ...publicListingWhere() },
     select: { id: true, slug: true, title: true, priceCents: true, location: true, sellerId: true, category: { select: { name: true } }, seller: { select: { displayName: true } }, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!listing) return 0;
@@ -135,7 +137,7 @@ async function notifyListing(id: string) {
 
 async function notifyService(id: string) {
   const service = await prisma.serviceListing.findFirst({
-    where: { id, status: "ACTIVE" },
+    where: { id, ...publicServiceWhere() },
     select: { id: true, slug: true, title: true, providerId: true, provider: { select: { displayName: true } }, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!service) return 0;
@@ -150,7 +152,7 @@ async function notifyService(id: string) {
 
 async function notifyProperty(id: string) {
   const property = await prisma.propertyListing.findFirst({
-    where: { id, status: "ACTIVE" },
+    where: { id, ...publicPropertyWhere() },
     select: { id: true, slug: true, title: true, priceCents: true, location: true, ownerId: true, owner: { select: { displayName: true } }, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!property) return 0;
@@ -189,7 +191,7 @@ async function notifyShopProduct(id: string) {
 export async function notifyPriceChange(listingId: string, oldCents: number, newCents: number) {
   if (oldCents === newCents) return 0;
   const listing = await prisma.listing.findFirst({
-    where: { id: listingId, status: "ACTIVE" },
+    where: { id: listingId, ...publicListingWhere() },
     select: { id: true, slug: true, title: true, sellerId: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!listing) return 0;

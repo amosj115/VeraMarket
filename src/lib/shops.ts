@@ -3,20 +3,21 @@ import { prisma } from "@/lib/prisma";
 type ShopLike = {
   status: string;
   isPaused: boolean;
+  owner: { status: string };
   subscriptionStatus?: string;
   subscription?: { status: string; expiresAt: Date | null } | null;
 };
 
 /**
- * A Virtual Store is publicly visible only when it is approved (status ACTIVE),
- * not paused, and its R59/month subscription is paid (subscriptionStatus ACTIVE),
- * still marked ACTIVE, and not past its expiry. Every public query, badge and
- * boost decision must use this filter so an expired subscription stops providing
- * benefits immediately, not only after the expiry cron has run.
+ * A Virtual Store is publicly visible only when its owner account and shop are
+ * ACTIVE, it is not paused, and its R59/month subscription is paid, active, and
+ * not past expiry. Every public query, badge and boost decision must use this
+ * filter so account holds and expired subscriptions take effect immediately.
  */
 export function activeShopFilter(now: Date = new Date()) {
   return {
     status: "ACTIVE" as const,
+    owner: { is: { status: "ACTIVE" as const } },
     isPaused: false,
     subscriptionStatus: "ACTIVE" as const,
     subscription: { is: { status: "ACTIVE" as const, expiresAt: { gt: now } } },
@@ -25,7 +26,7 @@ export function activeShopFilter(now: Date = new Date()) {
 
 /** Read-side twin of activeShopFilter for a shop row already fetched with its subscription. */
 export function isShopVisible(shop: ShopLike, now: Date = new Date()): boolean {
-  if (shop.status !== "ACTIVE" || shop.isPaused) return false;
+  if (shop.status !== "ACTIVE" || shop.owner.status !== "ACTIVE" || shop.isPaused) return false;
   if (shop.subscriptionStatus !== undefined && shop.subscriptionStatus !== "ACTIVE") return false;
   return shop.subscription?.status === "ACTIVE" && !!shop.subscription.expiresAt && shop.subscription.expiresAt > now;
 }

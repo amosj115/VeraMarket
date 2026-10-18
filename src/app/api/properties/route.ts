@@ -5,10 +5,11 @@ import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { enforceReviewStatus } from "@/lib/review-enforcement";
 import { slugify } from "@/lib/utils";
 import { createPropertySchema } from "@/lib/validation/property";
+import { publicPropertyWhere } from "@/lib/content-visibility";
 
 export async function GET() {
   const properties = await prisma.propertyListing.findMany({
-    where: { status: "ACTIVE" },
+    where: publicPropertyWhere(),
     orderBy: { createdAt: "desc" },
     take: 50,
   });

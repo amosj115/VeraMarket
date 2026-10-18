@@ -12,7 +12,7 @@ export async function POST(
   }
   const { id } = await params;
 
-  const listing = await prisma.listing.findUnique({ where: { id } });
+  const listing = await prisma.listing.findUnique({ where: { id }, include: { seller: { select: { status: true } } } });
   if (!listing) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
@@ -24,6 +24,10 @@ export async function POST(
   if (existing) {
     await prisma.favorite.delete({ where: { id: existing.id } });
     return NextResponse.json({ favorited: false });
+  }
+
+  if (listing.status !== "ACTIVE" || listing.seller.status !== "ACTIVE") {
+    return NextResponse.json({ error: "Listing is no longer available" }, { status: 404 });
   }
 
   await prisma.favorite.create({

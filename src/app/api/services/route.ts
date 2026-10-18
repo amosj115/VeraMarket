@@ -5,10 +5,11 @@ import { requireVerifiedProfile } from "@/lib/profile-gate";
 import { enforceReviewStatus } from "@/lib/review-enforcement";
 import { slugify } from "@/lib/utils";
 import { createServiceSchema } from "@/lib/validation/service";
+import { publicServiceWhere } from "@/lib/content-visibility";
 
 export async function GET() {
   const services = await prisma.serviceListing.findMany({
-    where: { status: "ACTIVE" },
+    where: publicServiceWhere(),
     orderBy: { createdAt: "desc" },
     take: 50,
     include: { category: true },

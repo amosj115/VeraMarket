@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createNotifications } from "@/lib/notifications";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 export type SavedSearchSettings = { enabled: boolean; maxPerUser: number };
 
@@ -14,7 +15,7 @@ export async function notifySavedSearchMatches(listingId: string) {
   const settings = await getSavedSearchSettings();
   if (!settings.enabled) return 0;
   const listing = await prisma.listing.findFirst({
-    where: { id: listingId, status: "ACTIVE" },
+    where: { id: listingId, ...publicListingWhere() },
     select: { id: true, slug: true, title: true, description: true, priceCents: true, condition: true, location: true, sellerId: true, category: { select: { slug: true } }, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } },
   });
   if (!listing) return 0;

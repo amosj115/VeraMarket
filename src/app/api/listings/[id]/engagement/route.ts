@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 const engagementSchema = z.object({ type: z.enum(["VIEW", "SHARE", "CONTACT"]) });
 
@@ -15,7 +16,7 @@ export async function POST(
   if (!parsed.success) return NextResponse.json({ error: "Invalid engagement" }, { status: 400 });
 
   const listing = await prisma.listing.findFirst({
-    where: { id, status: "ACTIVE" },
+    where: { id, ...publicListingWhere() },
     select: { id: true, sellerId: true },
   });
   if (!listing) return NextResponse.json({ error: "Listing is no longer available" }, { status: 404 });

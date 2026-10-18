@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { publicListingWhere } from "@/lib/listing-visibility";
 
 export async function POST(
   _request: Request,
@@ -19,7 +20,7 @@ export async function POST(
     return NextResponse.json({ liked: false, count });
   }
 
-  const listing = await prisma.listing.findFirst({ where: { id, status: "ACTIVE" }, select: { id: true } });
+  const listing = await prisma.listing.findFirst({ where: { id, ...publicListingWhere() }, select: { id: true } });
   if (!listing) return NextResponse.json({ error: "Listing is no longer available" }, { status: 404 });
 
   await prisma.listingLike.create({ data: { userId: session.user.id, listingId: id } });
