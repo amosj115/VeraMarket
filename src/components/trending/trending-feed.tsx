@@ -163,7 +163,8 @@ export function TrendingFeed({
 
     const applyFeedHeights = () => {
       const available = page.getBoundingClientRect().height;
-      const feedHeight = Math.max(0, Math.floor(available));
+      const navigationHeight = mobileNav?.getBoundingClientRect().height ?? 0;
+      const feedHeight = Math.max(0, Math.floor(available - navigationHeight));
 
       if (scrollContainer) {
         const current = scrollContainer.style.height;
@@ -495,7 +496,7 @@ function TrendingFeedCard({
               fill
               sizes="(max-width: 767px) 100vw, (max-width: 1280px) 58vw, 720px"
               preload={index === 0}
-              className="object-contain"
+              className="object-cover object-center md:object-contain"
             />
           ) : (
             <span className="absolute inset-0 flex items-center justify-center px-6 text-sm text-slate-300">

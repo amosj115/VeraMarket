@@ -184,7 +184,7 @@ async function HomepageListings() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {items.map((listing, index) => (
-        <article key={listing.id} className="overflow-hidden rounded-lg border border-border bg-white hover:shadow-md">
+        <article key={listing.id} className={`overflow-hidden rounded-lg border border-border bg-white hover:shadow-md ${index >= 2 ? "hidden sm:block" : ""}`}>
           <Link href={`/listing/${listing.slug}`} aria-label={`View listing ${listing.title}`} className="block">
             <div className="relative aspect-square bg-slate-100">
               <div className="absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
@@ -219,7 +219,7 @@ function HomepageListingsSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Loading listings">
       {[...Array(4)].map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-lg border border-border bg-white animate-pulse">
+        <div key={index} className={`overflow-hidden rounded-lg border border-border bg-white animate-pulse ${index >= 2 ? "hidden sm:block" : ""}`}>
           <div className="aspect-square bg-slate-200" />
           <div className="space-y-2 p-3">
             <div className="h-4 w-3/4 rounded bg-slate-200" />
