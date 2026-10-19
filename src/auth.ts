@@ -1,7 +1,8 @@
 import NextAuth, { Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/security/password";
+import { authenticateCredentials } from "@/lib/credentials";
+import { requiresLoginPhoneOtp, verifyLoginPhoneOtp } from "@/lib/login-phone-otp";
 import { loginSchema } from "@/lib/validation/auth";
 
 const nextAuth = NextAuth({
@@ -19,20 +20,26 @@ const nextAuth = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        verificationCode: { label: "Verification code", type: "text" },
       },
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email },
-        });
-        // Always run the compare to reduce timing-based user enumeration.
-        const passwordHash = user?.passwordHash ?? "$2a$12$invalidsaltinvalidsaltinvalidsalt.";
-        const valid = await verifyPassword(parsed.data.password, passwordHash);
-
-        if (!user || !valid) return null;
-        if (user.status === "BANNED" || user.status === "SUSPENDED") return null;
+        const user = await authenticateCredentials(parsed.data);
+        if (!user) return null;
+        if (requiresLoginPhoneOtp(user)) {
+          const code =
+            typeof credentials.verificationCode === "string"
+              ? credentials.verificationCode
+              : "";
+          if (
+            !user.phone ||
+            (await verifyLoginPhoneOtp(user.id, user.phone, code)) !== "verified"
+          ) {
+            return null;
+          }
+        }
 
         return {
           id: user.id,

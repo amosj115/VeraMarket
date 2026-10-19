@@ -202,6 +202,7 @@ enum AdStatus {
 enum OtpPurpose {
   PHONE_VERIFICATION
   PASSWORD_RESET
+  LOGIN
 }
 
 enum IdentityVerificationState {

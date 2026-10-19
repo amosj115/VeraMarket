@@ -30,6 +30,11 @@ export type SmsSendResult =
   | { ok: true; messageId: string }
   | { ok: false; reason: "auth" | "credits" | "invalid_number" | "provider_error" | "network" | "unknown"; status?: number; detail?: string };
 
+function redactSmsCodes(value: string, message: string): string {
+  const codes = new Set(message.match(/\b\d{6}\b/g) ?? []);
+  return [...codes].reduce((safe, code) => safe.replaceAll(code, "[redacted]"), value);
+}
+
 export async function sendSms(e164: string, message: string): Promise<SmsSendResult> {
   const email = process.env.SMS_MESSENGER_EMAIL;
   const token = process.env.SMS_MESSENGER_API_TOKEN;
@@ -56,13 +61,14 @@ export async function sendSms(e164: string, message: string): Promise<SmsSendRes
       result = text ? JSON.parse(text) : null;
     } catch {
       // Non-JSON response (e.g., HTML error page)
-      console.error("[phone-otp] SMS provider returned non-JSON response", { status: response.status, bodyPreview: text.slice(0, 200) });
+      const detail = redactSmsCodes(text, message).slice(0, 200);
+      console.error("[phone-otp] SMS provider returned non-JSON response", { status: response.status, bodyPreview: detail });
       return { ok: false, reason: "provider_error", status: response.status, detail: "Non-JSON response from provider" };
     }
 
     if (!response.ok) {
       // HTTP error status
-      const detail = result?.error ?? text.slice(0, 200);
+      const detail = redactSmsCodes(result?.error ?? text.slice(0, 200), message);
       console.error("[phone-otp] SMS provider HTTP error", { status: response.status, error: detail });
       if (response.status === 401 || response.status === 403) {
         return { ok: false, reason: "auth", status: response.status, detail };
@@ -78,12 +84,13 @@ export async function sendSms(e164: string, message: string): Promise<SmsSendRes
 
     // SMS Messenger success response: { "messageId": "...", "error": null }
     if (result?.error) {
-      console.error("[phone-otp] SMS provider reported error in response body", { error: result.error });
-      return { ok: false, reason: "provider_error", detail: result.error };
+      const detail = redactSmsCodes(result.error, message);
+      console.error("[phone-otp] SMS provider reported error in response body", { error: detail });
+      return { ok: false, reason: "provider_error", detail };
     }
 
     if (!result?.messageId) {
-      console.error("[phone-otp] SMS provider response missing messageId", { result });
+      console.error("[phone-otp] SMS provider response missing messageId");
       return { ok: false, reason: "unknown", detail: "Response missing messageId" };
     }
 
