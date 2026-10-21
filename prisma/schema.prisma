@@ -598,6 +598,7 @@ model ServiceListing {
   category     Category           @relation(fields: [categoryId], references: [id])
   title        String
   slug         String             @unique
+  coverImageUrl String?
   description  String
   pricingType  PricingType
   priceCents   Int?
@@ -679,6 +680,7 @@ model Image {
   property      PropertyListing? @relation("PropertyImages", fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([perceptualHash])
+  @@index([serviceId, ownerType, sortOrder])
 }
 
 // ---------------------------------------------------------------------------
