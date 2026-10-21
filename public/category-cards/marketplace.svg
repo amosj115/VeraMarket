@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs>
+    <linearGradient id="background" x1="72" y1="38" x2="742" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#174B83"/>
+      <stop offset="1" stop-color="#0D223D"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="285" y1="178" x2="570" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#82D8E8"/>
+      <stop offset="1" stop-color="#397CB5"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#background)" d="M0 0h800v600H0z"/>
+  <circle cx="690" cy="92" r="138" fill="#3A82B5" opacity=".28"/>
+  <circle cx="111" cy="537" r="190" fill="#44B4C6" opacity=".17"/>
+  <rect x="256" y="143" width="320" height="318" rx="38" fill="#071A2E" opacity=".38" transform="rotate(8 256 143)"/>
+  <rect x="245" y="148" width="320" height="318" rx="38" fill="url(#tile)" opacity=".95" transform="rotate(-7 245 148)"/>
+  <rect x="331" y="234" width="147" height="146" rx="26" fill="#EAF9FA" opacity=".88"/>
+  <circle cx="404" cy="307" r="40" fill="#397CB5" opacity=".72"/>
+  <path d="M129 145h76M167 107v76M638 407h62M669 376v62" stroke="#E5F7FA" stroke-linecap="round" stroke-width="10" opacity=".45"/>
+</svg>

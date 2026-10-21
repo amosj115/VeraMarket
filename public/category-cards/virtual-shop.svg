@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs>
+    <linearGradient id="background" x1="80" y1="48" x2="728" y2="558" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4A5594"/>
+      <stop offset="1" stop-color="#24274D"/>
+    </linearGradient>
+    <linearGradient id="store" x1="265" y1="191" x2="557" y2="466" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C6D8F5"/>
+      <stop offset="1" stop-color="#91AEE0"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#background)" d="M0 0h800v600H0z"/>
+  <circle cx="658" cy="105" r="162" fill="#A9B4EE" opacity=".17"/>
+  <circle cx="131" cy="505" r="185" fill="#85C8D8" opacity=".16"/>
+  <path d="M229 242h342l-36-91H265l-36 91Z" fill="#E9EDFC"/>
+  <path d="M248 242v212h304V242" fill="url(#store)"/>
+  <path d="M229 242c0 29 22 52 50 52s51-23 51-52c0 29 23 52 51 52s51-23 51-52c0 29 22 52 50 52s50-23 50-52" fill="#738BC6"/>
+  <path d="M298 294v-52m83 52v-52m84 52v-52" stroke="#E9EDFC" stroke-width="8"/>
+  <rect x="366" y="342" width="70" height="112" rx="8" fill="#34456F" opacity=".88"/>
+  <rect x="274" y="332" width="62" height="60" rx="7" fill="#E8F4FA"/>
+  <rect x="464" y="332" width="62" height="60" rx="7" fill="#E8F4FA"/>
+  <path d="M194 454h412" stroke="#DDE5FA" stroke-linecap="round" stroke-width="12" opacity=".55"/>
+</svg>

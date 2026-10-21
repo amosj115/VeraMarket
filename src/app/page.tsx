@@ -2,8 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
-import { activeShopFilter } from "@/lib/shops";
-import { publicPropertyWhere, publicServiceWhere } from "@/lib/content-visibility";
 import { Greeting } from "@/components/home/greeting";
 import { FavoriteToggle } from "@/components/favorites/favorite-toggle";
 import { cdnImage } from "@/lib/image-url";
@@ -12,25 +10,13 @@ import { formatZAR } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const firstImage = { take: 1, orderBy: { sortOrder: "asc" as const }, select: { url: true } };
+const HOME_CATEGORY_IMAGES = {
+  marketplace: "/category-cards/marketplace.svg",
+  virtualShop: "/category-cards/virtual-shop.svg",
+  services: "/category-cards/services.svg",
+  realEstate: "/category-cards/real-estate.svg",
+} as const;
 
-async function getHomeCovers() {
-  const [shop, service, property] = await Promise.all([
-    prisma.shop.findFirst({ where: { ...activeShopFilter(), images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
-    prisma.serviceListing.findFirst({ where: { ...publicServiceWhere(), images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
-    prisma.propertyListing.findFirst({ where: { ...publicPropertyWhere(), images: { some: {} } }, orderBy: { createdAt: "desc" }, select: { images: firstImage } }),
-  ]);
-
-  return {
-    // Marketplace no longer borrows a product listing image as its cover;
-    // a dedicated cover will be configured later. Until then the card keeps
-    // its neutral gradient background.
-    marketplace: undefined,
-    shops: shop?.images[0]?.url,
-    services: service?.images[0]?.url,
-    property: property?.images[0]?.url,
-  };
-}
 export default async function Home() {
   return (
     <div>
@@ -74,9 +60,7 @@ export default async function Home() {
       </section>
 
       <section className="mx-auto -mt-4 max-w-5xl px-4 sm:px-6">
-        <Suspense fallback={<CategoryCardGrid />}>
-          <HomepageCategories />
-        </Suspense>
+        <CategoryCardGrid />
       </section>
 
       <section className="mx-auto max-w-5xl px-4 pb-10 pt-8 sm:px-6">
@@ -95,45 +79,32 @@ export default async function Home() {
   );
 }
 
-async function HomepageCategories() {
-  const covers = await getHomeCovers();
-  return (
-    <CategoryCardGrid
-      covers={covers}
-    />
-  );
-}
-
-function CategoryCardGrid({
-  covers,
-}: {
-  covers?: Awaited<ReturnType<typeof getHomeCovers>>;
-}) {
+function CategoryCardGrid() {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <CategoryCard
         title="Marketplace"
         subtitle="Buy and sell products"
         href="/marketplace"
-        image={covers?.marketplace}
+        image={HOME_CATEGORY_IMAGES.marketplace}
       />
       <CategoryCard
         title="Virtual Shop"
         subtitle="Real businesses, real products"
         href="/shops"
-        image={covers?.shops}
+        image={HOME_CATEGORY_IMAGES.virtualShop}
       />
       <CategoryCard
         title="Services"
         subtitle="Find trusted people and businesses"
         href="/services"
-        image={covers?.services}
+        image={HOME_CATEGORY_IMAGES.services}
       />
       <CategoryCard
         title="Real Estate"
         subtitle="Buy, rent and discover property"
         href="/real-estate"
-        image={covers?.property}
+        image={HOME_CATEGORY_IMAGES.realEstate}
       />
     </div>
   );

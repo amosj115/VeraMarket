@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs>
+    <linearGradient id="background" x1="70" y1="34" x2="729" y2="574" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#587A87"/>
+      <stop offset="1" stop-color="#263E50"/>
+    </linearGradient>
+    <linearGradient id="house" x1="275" y1="185" x2="557" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E3E4D3"/>
+      <stop offset="1" stop-color="#AFC4B7"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#background)" d="M0 0h800v600H0z"/>
+  <circle cx="657" cy="91" r="145" fill="#D7D8B5" opacity=".16"/>
+  <circle cx="127" cy="509" r="190" fill="#8CB9AD" opacity=".19"/>
+  <path d="m212 294 188-153 188 153" stroke="#E3E4D3" stroke-linecap="round" stroke-linejoin="round" stroke-width="28"/>
+  <path d="M261 281v176h278V281L400 168 261 281Z" fill="url(#house)"/>
+  <rect x="361" y="344" width="78" height="113" rx="8" fill="#526E70"/>
+  <rect x="296" y="313" width="43" height="49" rx="5" fill="#6F9BA0"/>
+  <rect x="461" y="313" width="43" height="49" rx="5" fill="#6F9BA0"/>
+  <path d="M181 457h438" stroke="#DDE8DD" stroke-linecap="round" stroke-width="12" opacity=".5"/>
+</svg>
