@@ -7,7 +7,6 @@ import { formatZAR } from "@/lib/utils";
 import { cdnImage } from "@/lib/image-url";
 import { SaveSearchButton } from "@/components/searches/save-search-button";
 import { SearchActivityRecorder } from "@/components/searches/search-activity-recorder";
-import { Greeting } from "@/components/home/greeting";
 
 const RADIUS_OPTIONS = [10, 20, 50, 60, 70, 100];
 
@@ -69,7 +68,6 @@ export function MarketplaceClient({
   const [categories] = useState(initialCategories);
   const [listings, setListings] = useState<ListingCard[]>(initialListings ?? []);
   const [loading, setLoading] = useState(initialListings === undefined);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   // The server already rendered results for the initial URL — skip the mount fetch
   // that used to duplicate it (filter changes still refetch below).
   const skipNextFetch = useRef(initialListings !== undefined);
@@ -141,66 +139,51 @@ export function MarketplaceClient({
     setLocationError(null);
   }
 
+  const actionClass = "flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-brand bg-brand px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-dark active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mb-6 space-y-4">
-        <Greeting />
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Marketplace</h1>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => searchInputRef.current?.focus()}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-            >
-              Search
-            </button>
-            <Link
-              href="/sell"
-              className="rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-dark"
-            >
-              Sell something
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Search + primary filters */}
-      <form className="mt-3 space-y-2" method="get" role="search">
-        {/* Unified search bar with inline submit */}
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-white pl-3 focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-slate-400" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            ref={searchInputRef}
-            name="q"
-            type="search"
-            defaultValue={query}
-            placeholder="Search listings"
-            aria-label="Search listings"
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-slate-400"
-          />
-          <button
-            type="submit"
-            aria-label="Search"
-            className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand text-white transition hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <form className="space-y-3" method="get" role="search">
+        <div className="rounded-2xl bg-gradient-to-br from-brand to-brand-dark p-4 text-white shadow-sm sm:p-5">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Marketplace</h1>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/70 bg-white px-3 focus-within:ring-2 focus-within:ring-white/70">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-slate-400" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
               <path d="m20 20-3.5-3.5" />
             </svg>
-          </button>
+            <input
+              name="q"
+              type="search"
+              defaultValue={query}
+              placeholder="Search listings"
+              aria-label="Search listings"
+              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-foreground outline-none placeholder:text-slate-400"
+            />
+          </div>
         </div>
 
-        {/* Primary filters in a single wrapping row */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <button type="submit" className={actionClass}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <span className="truncate">Search</span>
+          </button>
+          <Link href="/sell" className={actionClass}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="truncate">Sell Something</span>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           <select
             name="category"
             defaultValue={category}
             aria-label="Category"
-            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+            className="h-11 min-w-0 w-full rounded-xl border border-border bg-white px-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
           >
             <option value="">All categories</option>
             {categories.map((item) => (
@@ -213,7 +196,7 @@ export function MarketplaceClient({
             value={radius ?? ""}
             onChange={(e) => setRadius(e.target.value ? parseInt(e.target.value, 10) : null)}
             aria-label="Distance"
-            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+            className="h-11 min-w-0 w-full rounded-xl border border-border bg-white px-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
           >
             <option value="">All distances</option>
             {RADIUS_OPTIONS.map((r) => (
@@ -225,30 +208,31 @@ export function MarketplaceClient({
             value={sortByDistance ? "distance" : "newest"}
             onChange={(e) => setSortByDistance(e.target.value === "distance")}
             aria-label="Sort by"
-            className="rounded-md border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-brand"
+            className="h-11 min-w-0 w-full rounded-xl border border-border bg-white px-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
           >
             <option value="newest">Newest first</option>
             <option value="distance">Nearest first</option>
           </select>
 
-          <button
-            type="button"
-            onClick={handleUseMyLocation}
-            disabled={useMyLocation}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${useMyLocation ? "bg-brand text-white opacity-60" : "bg-brand text-white hover:bg-brand-dark"}`}
-          >
-            {useMyLocation ? "Locating..." : "Use my location"}
-          </button>
-
-          {(buyerLat !== null || buyerLng !== null) && (
+          <div className="flex min-w-0 flex-col gap-1">
             <button
               type="button"
-              onClick={clearLocation}
-              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              onClick={handleUseMyLocation}
+              disabled={useMyLocation}
+              className="h-11 min-w-0 rounded-xl border border-brand bg-brand px-2 text-sm font-semibold text-white transition hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60"
             >
-              Clear location
+              {useMyLocation ? "Locating..." : "Use my location"}
             </button>
-          )}
+            {(buyerLat !== null || buyerLng !== null) && (
+              <button
+                type="button"
+                onClick={clearLocation}
+                className="self-start px-1 text-xs font-medium text-slate-600 underline-offset-2 transition hover:text-brand hover:underline"
+              >
+                Clear location
+              </button>
+            )}
+          </div>
         </div>
 
         {locationError && <p className="text-sm text-red-700">{locationError}</p>}
