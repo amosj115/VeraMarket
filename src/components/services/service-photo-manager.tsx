@@ -244,24 +244,7 @@ export function ServicePhotoManager({
             Choose one main photo to represent {serviceTitle}.
           </p>
         </div>
-        <div className="relative mt-4 aspect-[16/8] overflow-hidden rounded-lg bg-slate-100 sm:aspect-[16/6]">
-          {displayedCover ? (
-            <Image
-              src={coverPending ? displayedCover : cdnImage(displayedCover, 1440)}
-              alt={`${serviceTitle} business cover`}
-              fill
-              sizes="(max-width: 640px) 100vw, 768px"
-              unoptimized={Boolean(coverPending)}
-              className="object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 px-4 text-center text-sm text-slate-500">
-              Your cover photo preview will appear here.
-            </div>
-          )}
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="inline-flex cursor-pointer items-center rounded-md border border-border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <label className="mt-4 inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:w-auto">
             {coverUrl || coverPending ? "Choose a different cover photo" : "Choose cover photo"}
             <input
               type="file"
@@ -278,13 +261,30 @@ export function ServicePhotoManager({
                 setNotice(null);
               }}
             />
-          </label>
+        </label>
+        <div className="relative mt-3 aspect-[16/8] overflow-hidden rounded-lg bg-slate-100 sm:aspect-[16/6]">
+          {displayedCover ? (
+            <Image
+              src={coverPending ? displayedCover : cdnImage(displayedCover, 1440)}
+              alt={`${serviceTitle} business cover`}
+              fill
+              sizes="(max-width: 640px) 100vw, 768px"
+              unoptimized={Boolean(coverPending)}
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 px-4 text-center text-sm text-slate-500">
+              Your cover photo preview will appear here.
+            </div>
+          )}
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {coverPending && (
             <button
               type="button"
               disabled={busy}
               onClick={uploadCover}
-              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
+              className="min-h-11 w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60 sm:w-auto"
             >
               {busy ? "Saving photo…" : "Save cover photo"}
             </button>
@@ -294,7 +294,7 @@ export function ServicePhotoManager({
               type="button"
               disabled={busy}
               onClick={removeCover}
-              className="rounded-md px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+              className="min-h-11 w-full rounded-md px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 sm:w-auto"
             >
               Remove cover
             </button>
@@ -314,6 +314,74 @@ export function ServicePhotoManager({
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
             {photos.length}/{SERVICE_PORTFOLIO_LIMIT}
           </span>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          <p className="text-xs text-slate-500">
+            JPEG, PNG, and WebP · up to {SERVICE_PORTFOLIO_LIMIT} work photos · each photo is optimized before upload.
+          </p>
+          <label
+            className={`inline-flex min-h-11 w-full items-center justify-center rounded-md border px-4 py-2 text-sm font-medium sm:w-auto ${
+              remaining > 0
+                ? "cursor-pointer border-border text-slate-700 hover:bg-slate-50"
+                : "cursor-not-allowed border-border text-slate-400"
+            }`}
+          >
+            {remaining > 0 ? "Select portfolio photos" : `Portfolio full (${SERVICE_PORTFOLIO_LIMIT}/${SERVICE_PORTFOLIO_LIMIT})`}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              multiple
+              disabled={busy || remaining === 0}
+              className="sr-only"
+              onChange={choosePortfolioPhotos}
+            />
+          </label>
+
+          {pendingPhotos.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-700">
+                Preview selected photos ({pendingPhotos.length})
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {pendingPhotos.map((photo) => (
+                  <div key={photo.previewUrl} className="overflow-hidden rounded-lg border border-border">
+                    <div className="relative aspect-square bg-slate-100">
+                      <Image
+                        src={photo.previewUrl}
+                        alt={`Preview: ${photo.file.name}`}
+                        fill
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 p-2">
+                      <span className="truncate text-xs text-slate-500">{photo.file.name}</span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => removePendingPhoto(photo)}
+                        className="shrink-0 text-xs font-medium text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={uploadPortfolioPhotos}
+                className="min-h-11 w-full rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60 sm:w-auto"
+              >
+                {busy
+                  ? "Uploading photos…"
+                  : `Upload ${pendingPhotos.length} Photo${pendingPhotos.length === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          )}
         </div>
 
         {photos.length > 0 ? (
@@ -361,72 +429,6 @@ export function ServicePhotoManager({
           <p className="mt-5 rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-slate-500">
             Your completed-work photos will appear here.
           </p>
-        )}
-
-        <div className="mt-5">
-          <label
-            className={`inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium ${
-              remaining > 0
-                ? "cursor-pointer border-border text-slate-700 hover:bg-slate-50"
-                : "cursor-not-allowed border-border text-slate-400"
-            }`}
-          >
-            {remaining > 0 ? "Select portfolio photos" : `Portfolio full (${SERVICE_PORTFOLIO_LIMIT}/${SERVICE_PORTFOLIO_LIMIT})`}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              multiple
-              disabled={busy || remaining === 0}
-              className="sr-only"
-              onChange={choosePortfolioPhotos}
-            />
-          </label>
-          <p className="mt-2 text-xs text-slate-500">
-            JPEG, PNG, and WebP · up to {SERVICE_PORTFOLIO_LIMIT} work photos · each photo is optimized before upload.
-          </p>
-        </div>
-
-        {pendingPhotos.length > 0 && (
-          <div className="mt-5">
-            <p className="text-sm font-medium text-slate-700">
-              Preview selected photos ({pendingPhotos.length})
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {pendingPhotos.map((photo) => (
-                <div key={photo.previewUrl} className="overflow-hidden rounded-lg border border-border">
-                  <div className="relative aspect-square bg-slate-100">
-                    <Image
-                      src={photo.previewUrl}
-                      alt={`Preview: ${photo.file.name}`}
-                      fill
-                      sizes="(max-width: 640px) 50vw, 33vw"
-                      unoptimized
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 p-2">
-                    <span className="truncate text-xs text-slate-500">{photo.file.name}</span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => removePendingPhoto(photo)}
-                      className="shrink-0 text-xs font-medium text-red-700"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={uploadPortfolioPhotos}
-              className="mt-4 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
-            >
-              {busy ? "Uploading photos…" : `Upload ${pendingPhotos.length} photo${pendingPhotos.length === 1 ? "" : "s"}`}
-            </button>
-          </div>
         )}
       </section>
 
