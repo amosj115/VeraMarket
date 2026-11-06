@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { Greeting } from "@/components/home/greeting";
-import { FavoriteToggle } from "@/components/favorites/favorite-toggle";
 import { cdnImage } from "@/lib/image-url";
 import { getListings } from "@/lib/listings";
 import { formatZAR } from "@/lib/utils";
@@ -87,6 +86,7 @@ function CategoryCardGrid() {
         subtitle="Buy and sell products"
         href="/marketplace"
         image={HOME_CATEGORY_IMAGES.marketplace}
+        priority
       />
       <CategoryCard
         title="Virtual Shop"
@@ -116,7 +116,13 @@ async function HomepageListings() {
     include: {
       listing: {
         where: { status: "ACTIVE", seller: { is: { status: "ACTIVE" } } },
-        include: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          priceCents: true,
+          location: true,
+          areaName: true,
           images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } },
           category: { select: { name: true } },
         },
@@ -133,7 +139,7 @@ async function HomepageListings() {
   const remaining = Math.max(0, 4 - boostedListings.length);
   let ordinaryListings: Awaited<ReturnType<typeof getListings>>["listings"] = [];
   if (remaining > 0) {
-    const result = await getListings({ page: 1 });
+    const result = await getListings({ page: 1, pageSize: remaining, includeTotal: false });
     const boostedIds = new Set(boostedListings.map((l) => l.id));
     ordinaryListings = result.listings
       .filter((l) => !boostedIds.has(l.id))
@@ -167,7 +173,6 @@ async function HomepageListings() {
                   alt={listing.title}
                   fill
                   sizes="(max-width: 640px) 50vw, 25vw"
-                  preload={index === 0}
                   className="object-cover"
                 />
               ) : (
@@ -202,7 +207,7 @@ function HomepageListingsSkeleton() {
   );
 }
 
-function CategoryCard({ title, subtitle, href, image, preload }: { title: string; subtitle: string; href: string; image?: string; preload?: boolean }) {
+function CategoryCard({ title, subtitle, href, image, priority }: { title: string; subtitle: string; href: string; image?: string; priority?: boolean }) {
   return (
     <Link href={href} className="group relative flex aspect-[4/3] items-end overflow-hidden rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 shadow-md ring-1 ring-black/5">
       {image && (
@@ -211,7 +216,8 @@ function CategoryCard({ title, subtitle, href, image, preload }: { title: string
           alt=""
           fill
           sizes="(max-width: 640px) 50vw, 25vw"
-          preload={preload}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
           className="object-cover transition duration-300 group-hover:scale-105"
         />
       )}

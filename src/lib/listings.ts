@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { activeListingBoosts, listingWeight } from "@/lib/boosts";
 import { activeStoreOwners, type ActiveStore } from "@/lib/shops";
@@ -16,6 +17,7 @@ export type ListingQueryInput = {
   minPrice?: string;
   maxPrice?: string;
   page: number;
+  pageSize?: number;
   buyerLat?: number | null;
   buyerLng?: number | null;
   radius?: number | null;
@@ -45,7 +47,30 @@ export type ListingCard = {
   store: ActiveStore | null;
 };
 
+type ListingPage = { listings: ListingCard[]; page: number; pageSize: number };
+type ListingPageWithTotal = ListingPage & { total: number };
+
 const PAGE_SIZE = 24;
+
+const listingCardSelect = {
+  id: true,
+  slug: true,
+  title: true,
+  priceCents: true,
+  condition: true,
+  location: true,
+  latitude: true,
+  longitude: true,
+  areaName: true,
+  status: true,
+  viewCount: true,
+  createdAt: true,
+  updatedAt: true,
+  sellerId: true,
+  categoryId: true,
+  images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } },
+  category: { select: { name: true, slug: true } },
+} satisfies Prisma.ListingSelect;
 
 // Haversine formula to calculate distance between two points in kilometers
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -71,13 +96,17 @@ export function parseDistanceParams(params: { lat?: string | null; lng?: string 
   return { buyerLat, buyerLng, radius, sortByDistance: params.sort === "distance" };
 }
 
-export async function getListings(input: ListingQueryInput): Promise<{ listings: ListingCard[]; total: number; page: number; pageSize: number }> {
+export function getListings(input: ListingQueryInput & { includeTotal: false }): Promise<ListingPage>;
+export function getListings(input: ListingQueryInput & { includeTotal?: true }): Promise<ListingPageWithTotal>;
+export async function getListings(
+  input: ListingQueryInput & { includeTotal?: boolean },
+): Promise<ListingPage | ListingPageWithTotal> {
   const { q, category: categorySlug, condition, location, minPrice, maxPrice, page } = input;
   const buyerLat = input.buyerLat ?? null;
   const buyerLng = input.buyerLng ?? null;
   const radius = input.radius ?? null;
   const sortByDistance = input.sortByDistance ?? false;
-  const pageSize = PAGE_SIZE;
+  const pageSize = Math.min(PAGE_SIZE, Math.max(1, input.pageSize ?? PAGE_SIZE));
 
   const where: Record<string, unknown> = publicListingWhere();
   if (q) {
@@ -111,18 +140,17 @@ export async function getListings(input: ListingQueryInput): Promise<{ listings:
   };
 
   // The page row set and the total are independent — run them together.
-  const [found, total] = await Promise.all([
+  const [found, total, boosts, stores] = await Promise.all([
     prisma.listing.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize * (needsDistanceFilter ? 5 : 1), // Fetch more if filtering by distance
-      include: {
-        images: { take: 1, orderBy: { sortOrder: "asc" } },
-        category: { select: { name: true, slug: true } },
-      },
+      select: listingCardSelect,
     }),
-    prisma.listing.count({ where }),
+    input.includeTotal === false ? Promise.resolve(null) : prisma.listing.count({ where }),
+    activeListingBoosts(),
+    activeStoreOwners(),
   ]);
   let listings = found;
 
@@ -150,7 +178,6 @@ export async function getListings(input: ListingQueryInput): Promise<{ listings:
   // sorting is explicit user intent and is never overridden by placement.
   // Fetched fresh every request: a subscription purchase or expiry must change
   // placement and badges immediately (product guarantee), and both tables are small.
-  const [boosts, stores] = await Promise.all([activeListingBoosts(), activeStoreOwners()]);
   const weightOf = (listing: { id: string; sellerId: string }) => listingWeight(boosts.get(listing.id), stores.has(listing.sellerId));
   let ordered = listings;
   if (page === 1 && !sortByDistance && (boosts.size || stores.size)) {
@@ -166,7 +193,7 @@ export async function getListings(input: ListingQueryInput): Promise<{ listings:
       where: { ...where, AND: [{ OR: candidateOr }] },
       orderBy: { createdAt: "desc" },
       take: 200,
-      include: { images: { take: 1, orderBy: { sortOrder: "asc" } }, category: { select: { name: true, slug: true } } },
+      select: listingCardSelect,
     })).filter(withinRadius);
     const promoted = candidates
       .map((listing) => ({ listing, weight: weightOf(listing) }))
@@ -205,5 +232,6 @@ export async function getListings(input: ListingQueryInput): Promise<{ listings:
     store: stores.get(listing.sellerId) ?? null,
   }));
 
-  return { listings: cards, total, page, pageSize };
+  const result = { listings: cards, page, pageSize };
+  return total === null ? result : { ...result, total };
 }

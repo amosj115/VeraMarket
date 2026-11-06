@@ -22,8 +22,12 @@ export default async function MarketplacePage({ searchParams }: { searchParams: 
   // Listings and categories are independent — fetch them together so the first
   // paint already contains real results instead of an empty grid the client fills.
   const [categories, initialListings] = await Promise.all([
-    prisma.category.findMany({ where: { domain: "MARKETPLACE", isEnabled: true }, orderBy: { sortOrder: "asc" } }),
-    getListings({ q: query || undefined, category: category || undefined, page: 1, buyerLat, buyerLng, radius, sortByDistance }),
+    prisma.category.findMany({
+      where: { domain: "MARKETPLACE", isEnabled: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
+    getListings({ q: query || undefined, category: category || undefined, page: 1, buyerLat, buyerLng, radius, sortByDistance, includeTotal: false }),
   ]);
 
   return (
