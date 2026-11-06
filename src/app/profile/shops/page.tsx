@@ -19,7 +19,8 @@ export default async function MyShopsPage() {
         orderBy: { createdAt: "desc" },
         include: { images: { orderBy: { sortOrder: "asc" } }, category: true },
       },
-      subscription: true,
+      // Explicit select: provider tokens must never reach the client component.
+      subscription: { select: { status: true, expiresAt: true, renewsAt: true, autoRenew: true, cancelledAt: true, renewalAttempts: true, lastRenewalError: true } },
     },
   });
   // Subscription state is derived in a lib helper (not with Date.now in the

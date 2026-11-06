@@ -29,7 +29,7 @@ type ShopData = {
   status: string;
   isPaused: boolean;
   monthlyPriceCents: number;
-  subscription?: { status: string | null; expiresAt?: string | Date | null } | null;
+  subscription?: { status: string | null; expiresAt?: string | Date | null; renewsAt?: string | Date | null; autoRenew?: boolean; cancelledAt?: string | Date | null; renewalAttempts?: number; lastRenewalError?: string | null } | null;
   subscriptionActive: boolean;
   renewingSoon: boolean;
   categories: ShopCategory[];
@@ -54,6 +54,7 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [renewConsent, setRenewConsent] = useState(false);
 
   const visibleProducts = shop.products.filter((product) => {
     const haystack = `${product.name} ${product.description}`.toLowerCase();
@@ -135,8 +136,8 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
     router.refresh();
   }
 
-  // Start (or renew) the R59/month subscription through Paystack; the store only
-  // becomes public after the payment webhook confirms the charge.
+  // Start the recurring monthly subscription; the store only becomes public after the
+  // provider's payment is verified server-side.
   async function subscribe() {
     setBusy(true);
     setNotice(null);
@@ -144,7 +145,7 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
       const response = await fetch(`/api/shops/${shop.id}/subscription`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "subscribe" }),
+        body: JSON.stringify({ action: "subscribe", autoRenewConsent: renewConsent }),
       });
       const data = await response.json();
       if (!response.ok || !data.authorizationUrl) throw new Error(data.error ?? "Could not start subscription payment.");
@@ -154,6 +155,17 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
       setNotice(error instanceof Error ? error.message : "Could not start subscription payment.");
     }
     setBusy(false);
+  }
+
+  async function cancelSubscription() {
+    if (!window.confirm("Cancel automatic renewal? Your store stays public until the end of the period you have already paid for, and you will not be charged again.")) return;
+    setBusy(true);
+    setNotice(null);
+    const response = await fetch(`/api/shops/${shop.id}/subscription`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }) });
+    const data = await response.json().catch(() => ({}));
+    setNotice(response.ok ? "Automatic renewal cancelled. You will not be charged again." : data.error ?? "Could not cancel the subscription.");
+    setBusy(false);
+    if (response.ok) router.refresh();
   }
 
   async function saveCategory(event: React.FormEvent<HTMLFormElement>) {
@@ -202,8 +214,12 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
   const subStatus = shop.subscription?.status ?? "PENDING";
   const expiresAt = shop.subscription?.expiresAt ? new Date(shop.subscription.expiresAt) : null;
   const subscriptionActive = shop.subscriptionActive;
-  const renewingSoon = shop.renewingSoon;
-  const showSubscribe = !subscriptionActive || renewingSoon;
+  const autoRenew = !!shop.subscription?.autoRenew;
+  const cancelledAt = shop.subscription?.cancelledAt ? new Date(shop.subscription.cancelledAt) : null;
+  const renewsAt = shop.subscription?.renewsAt ? new Date(shop.subscription.renewsAt) : null;
+  const retrying = autoRenew && (shop.subscription?.renewalAttempts ?? 0) > 0;
+  // Auto-renewing subscriptions are renewed by the provider schedule, so no manual renew button.
+  const showSubscribe = !autoRenew && (!subscriptionActive || shop.renewingSoon);
 
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-white">
@@ -246,20 +262,31 @@ export function ShopManagement({ shop }: { shop: ShopData }) {
         <div className="space-y-5">
           <div className="rounded-md border border-brand/30 bg-brand/5 p-3">
             <h3 className="text-sm font-semibold">Monthly subscription</h3>
-            <p className="mt-1 text-xs text-slate-600">{formatZAR(shop.monthlyPriceCents)} per month, charged through Paystack. Your store is only public while the subscription is active.</p>
+            <p className="mt-1 text-xs text-slate-600">{formatZAR(shop.monthlyPriceCents)} per month, billed automatically every month until you cancel. Your store is only public while the subscription is active.</p>
             <p className="mt-2 text-xs text-slate-700">
               {subscriptionActive ? (
-                <>Status: <span className="font-semibold text-emerald-700">Active</span> until {expiresAt?.toLocaleDateString("en-ZA")}{renewingSoon ? " — renewing keeps your store online without interruption" : ""}</>
+                <>Status: <span className="font-semibold text-emerald-700">{autoRenew ? "Active" : "Cancelled"}</span>{autoRenew ? <> · next payment of {formatZAR(shop.monthlyPriceCents)} on {(renewsAt ?? expiresAt)?.toLocaleDateString("en-ZA")}</> : <> · access until {expiresAt?.toLocaleDateString("en-ZA")}, then it ends and you will not be charged again</>}</>
               ) : subStatus === "PENDING" ? (
-                <span className="font-semibold text-amber-700">Status: waiting for payment</span>
+                <span className="font-semibold text-amber-700">Status: waiting for payment confirmation</span>
               ) : (
                 <span className="font-semibold text-red-700">Status: {subStatus.toLowerCase()} — store hidden from public pages</span>
               )}
             </p>
+            {retrying && <p className="mt-1 text-xs font-medium text-amber-700">Your last renewal payment failed. We will retry automatically; update your card by resubscribing if it keeps failing.</p>}
+            {cancelledAt && !autoRenew && <p className="mt-1 text-xs text-slate-500">Cancelled on {cancelledAt.toLocaleDateString("en-ZA")}.</p>}
             {showSubscribe && (
-              <button type="button" disabled={busy} onClick={subscribe} className="mt-3 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-                {busy ? "Redirecting..." : subscriptionActive ? `Renew for ${formatZAR(shop.monthlyPriceCents)}/month` : `Subscribe for ${formatZAR(shop.monthlyPriceCents)}/month`}
+              <label className="mt-3 flex items-start gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={renewConsent} onChange={(event) => setRenewConsent(event.target.checked)} className="mt-0.5" />
+                <span>I agree that my card details will be securely saved by our payment provider and charged {formatZAR(shop.monthlyPriceCents)} automatically every month until I cancel.</span>
+              </label>
+            )}
+            {showSubscribe && (
+              <button type="button" disabled={busy || !renewConsent} onClick={subscribe} className="mt-3 w-full rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto">
+                {busy ? "Redirecting..." : `Subscribe for ${formatZAR(shop.monthlyPriceCents)}/month`}
               </button>
+            )}
+            {autoRenew && (
+              <button type="button" disabled={busy} onClick={cancelSubscription} className="mt-3 w-full rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-60 sm:w-auto">Cancel subscription</button>
             )}
             <p className="mt-3 text-xs text-slate-500">While active, your marketplace listings show an 🏪 &quot;Available in Virtual Store&quot; badge and receive a 25% visibility boost — the listing itself appears in search results as usual, so nothing needs to be published twice.</p>
           </div>

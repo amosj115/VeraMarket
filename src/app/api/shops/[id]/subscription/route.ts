@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { integrations } from "@/lib/config";
-import { secureAppUrl } from "@/lib/app-url";
+import { getPaymentProvider } from "@/lib/payments/registry";
+import { PENDING_CHECKOUT_WINDOW_MS, cancelShopSubscription, newPaymentRef, providerNotifyUrl, startProviderCheckout } from "@/lib/payments/service";
 
 const RENEWAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Actions: "subscribe" (start or renew the R59/month subscription through Paystack),
+// Actions: "subscribe" (start the recurring monthly subscription through the payment
+// provider), "cancel" (stop future renewals; access continues until the paid period ends),
 // "pause" and "reactivate" (store visibility only — they never touch the paid
 // subscription, which is owned by the payment/webhook flow).
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   });
   if (!shop) return NextResponse.json({ error: "Virtual Store not found" }, { status: 404 });
 
-  const { action } = (await request.json().catch(() => ({ action: "subscribe" }))) as { action?: string };
+  const { action, autoRenewConsent } = (await request.json().catch(() => ({ action: "subscribe" }))) as { action?: string; autoRenewConsent?: unknown };
 
   if (action === "pause") {
     await prisma.shop.update({ where: { id }, data: { isPaused: true } });
@@ -33,7 +33,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ ok: true, paused: false });
   }
 
+  if (action === "cancel") {
+    const result = await cancelShopSubscription(shop.id);
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json({ ok: true, cancelled: true, accessUntil: result.accessUntil, tokenRemoved: result.tokenRemoved });
+  }
+
   if (action !== "subscribe" && action !== "activate") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+
+  // Saving a card and charging it every month needs the seller's explicit opt-in.
+  if (autoRenewConsent !== true) return NextResponse.json({ error: "Please agree to automatic monthly billing to subscribe." }, { status: 400 });
 
   const now = new Date();
   const subscription = shop.subscription;
@@ -46,30 +55,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // shown to them before checkout — no hidden or fabricated price.
   const amountCents = shop.monthlyPriceCents;
   if (amountCents <= 0) return NextResponse.json({ error: "This store has no subscription price configured." }, { status: 500 });
-  if (!integrations.paystack.configured) return NextResponse.json({ error: "Subscription payments are not configured. Add Paystack credentials before accepting payment.", missing: integrations.paystack.missing }, { status: 503 });
-
-  const reference = `vera_${randomUUID()}`;
-  const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: session.user.email, amount: amountCents, currency: "ZAR", reference, callback_url: `${secureAppUrl()}/profile/shops`, metadata: { purpose: "VIRTUAL_STORE_SUBSCRIPTION", shopId: shop.id, userId: session.user.id } }),
-  });
-  const paystackData = await paystackResponse.json().catch(() => null);
-  if (!paystackResponse.ok || !paystackData?.status || !paystackData?.data?.authorization_url) {
-    return NextResponse.json({ error: "Payment initialization failed. No subscription was started." }, { status: 502 });
+  const provider = getPaymentProvider();
+  const providerConfig = provider.config();
+  if (!providerConfig.configured) return NextResponse.json({ error: "Subscription payments are not configured yet. No payment will be taken.", missing: providerConfig.missing }, { status: 503 });
+  if (!provider.supportsRecurring) return NextResponse.json({ error: "Automatic monthly billing is not enabled on the payment account yet, so a Virtual Store subscription cannot be started. No payment will be taken." }, { status: 503 });
+  if (subscription?.autoRenew) return NextResponse.json({ error: "Your subscription already renews automatically. Cancel it first if you want to change it." }, { status: 409 });
+  const checkoutCutoff = new Date(now.getTime() - PENDING_CHECKOUT_WINDOW_MS);
+  if (subscription && (await prisma.payment.count({ where: { subscriptionId: subscription.id, kind: "INITIAL", status: "PENDING", createdAt: { gt: checkoutCutoff } } })) > 0) {
+    return NextResponse.json({ error: "A checkout for this store is already in progress. Complete it or wait a few minutes before trying again." }, { status: 409 });
   }
 
-  // Only now that Paystack accepted the charge request do we record the pending
-  // payment; the webhook is what turns it into an active subscription. A renewal
-  // keeps the current ACTIVE status so visibility never drops while paying.
-  const payment = await prisma.payment.create({
-    data: { userId: session.user.id, purpose: "VIRTUAL_STORE_SUBSCRIPTION", amountCents, currency: "ZAR", status: "PENDING", provider: "paystack", providerRef: reference },
-  });
-  if (subscription) {
-    await prisma.shopSubscription.update({ where: { id: subscription.id }, data: { ...(activeUntil ? {} : { status: "PENDING" }), monthlyPriceCents: amountCents, paymentId: payment.id } });
-  } else {
-    await prisma.shopSubscription.create({ data: { shopId: shop.id, status: "PENDING", monthlyPriceCents: amountCents, paymentId: payment.id } });
+  // Store the PENDING payment first (server-side price) with an optimistic lock on the
+  // subscription row so two concurrent requests cannot both start a checkout.
+  let payment;
+  try {
+    payment = await prisma.$transaction(async (tx) => {
+      const sub = subscription ?? (await tx.shopSubscription.create({ data: { shopId: shop.id, status: "PENDING", monthlyPriceCents: amountCents, provider: provider.id } }));
+      const created = await tx.payment.create({ data: { userId: session.user.id, purpose: "VIRTUAL_STORE_SUBSCRIPTION", amountCents, currency: "ZAR", status: "PENDING", provider: provider.id, providerRef: newPaymentRef(), kind: "INITIAL", subscriptionId: sub.id } });
+      const locked = await tx.shopSubscription.updateMany({ where: { id: sub.id, paymentId: sub.paymentId }, data: { monthlyPriceCents: amountCents, paymentId: created.id, provider: provider.id, ...(activeUntil ? {} : { status: "PENDING" }) } });
+      if (locked.count === 0) throw new Error("subscription_changed");
+      return created;
+    });
+  } catch {
+    return NextResponse.json({ error: "Your subscription changed while we were starting checkout. Please try again." }, { status: 409 });
   }
 
-  return NextResponse.json({ ok: true, status: "PENDING", paymentRequired: true, amountCents, currency: "ZAR", authorizationUrl: paystackData.data.authorization_url, reference }, { status: 201 });
+  try {
+    const checkout = await startProviderCheckout(provider, payment.id, { recurring: true, notifyUrl: providerNotifyUrl(provider.id) });
+    return NextResponse.json({ ok: true, status: "PENDING", paymentRequired: true, amountCents, currency: "ZAR", authorizationUrl: checkout.redirectUrl, reference: checkout.reference }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Payment initialization failed. No subscription was started and you were not charged." }, { status: 502 });
+  }
 }
