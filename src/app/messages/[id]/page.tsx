@@ -28,7 +28,11 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         userA: { select: { id: true, displayName: true, username: true } },
         userB: { select: { id: true, displayName: true, username: true } },
         listing: { select: { id: true, title: true, slug: true, priceCents: true, status: true, sellerId: true, images: { take: 1, orderBy: { sortOrder: "asc" }, select: { url: true } } } },
-        messages: { orderBy: { createdAt: "asc" }, include: { sender: { select: { id: true, displayName: true } } } },
+        messages: {
+          where: { OR: [{ visibleToId: null }, { visibleToId: me }] },
+          orderBy: { createdAt: "asc" },
+          include: { sender: { select: { id: true, displayName: true } } },
+        },
       },
     }),
     expireStaleOffers({ conversationId: id }),
@@ -41,7 +45,15 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     prisma.offer.findMany({ where: { conversationId: id } }),
   ]);
   await Promise.all([
-    prisma.message.updateMany({ where: { conversationId: id, senderId: { not: me }, readAt: null }, data: { readAt: new Date() } }),
+    prisma.message.updateMany({
+      where: {
+        conversationId: id,
+        senderId: { not: me },
+        readAt: null,
+        OR: [{ visibleToId: null }, { visibleToId: me }],
+      },
+      data: { readAt: new Date() },
+    }),
     markConversationNotificationsRead(me, id),
   ]);
   const offerById = new Map(offers.map((offer) => [offer.id, offer]));

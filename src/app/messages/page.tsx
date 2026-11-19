@@ -18,8 +18,12 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
       userA: { select: { id: true, displayName: true, username: true } },
       userB: { select: { id: true, displayName: true, username: true } },
       listing: { select: { title: true, slug: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
-      _count: { select: { messages: { where: { senderId: { not: me }, readAt: null } } } },
+      messages: {
+        where: { OR: [{ visibleToId: null }, { visibleToId: me }] },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      _count: { select: { messages: { where: { senderId: { not: me }, readAt: null, OR: [{ visibleToId: null }, { visibleToId: me }] } } } },
     },
   });
 

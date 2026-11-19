@@ -38,7 +38,10 @@ export async function GET(
   // unbounded payload: the latest MESSAGE_HISTORY_LIMIT messages, still ascending.
   // Older messages stay in the database; the UI reads the recent window.
   const history = await prisma.message.findMany({
-    where: { conversationId: id },
+    where: {
+      conversationId: id,
+      OR: [{ visibleToId: null }, { visibleToId: session.user.id }],
+    },
     orderBy: { createdAt: "desc" },
     take: MESSAGE_HISTORY_LIMIT,
     include: { sender: { select: { id: true, displayName: true, username: true } } },
@@ -47,7 +50,12 @@ export async function GET(
 
   await Promise.all([
     prisma.message.updateMany({
-      where: { conversationId: id, senderId: { not: session.user.id }, readAt: null },
+      where: {
+        conversationId: id,
+        senderId: { not: session.user.id },
+        readAt: null,
+        OR: [{ visibleToId: null }, { visibleToId: session.user.id }],
+      },
       data: { readAt: new Date() },
     }),
     markConversationNotificationsRead(session.user.id, id),

@@ -51,7 +51,11 @@ async function loadConversations(userId: string, ids: string[]): Promise<Convers
       userA: { select: { id: true, displayName: true, username: true, avatarUrl: true } },
       userB: { select: { id: true, displayName: true, username: true, avatarUrl: true } },
       messages: {
-        where: { senderId: { not: userId }, readAt: null },
+        where: {
+          senderId: { not: userId },
+          readAt: null,
+          OR: [{ visibleToId: null }, { visibleToId: userId }],
+        },
         orderBy: { createdAt: "desc" },
         take: 1,
         select: { body: true, createdAt: true },
@@ -64,7 +68,12 @@ async function loadConversations(userId: string, ids: string[]): Promise<Convers
 export async function getUnreadTotals(userId: string) {
   const [chatUnread, systemUnread] = await Promise.all([
     prisma.message.count({
-      where: { senderId: { not: userId }, readAt: null, conversation: conversationFilter(userId) },
+      where: {
+        senderId: { not: userId },
+        readAt: null,
+        OR: [{ visibleToId: null }, { visibleToId: userId }],
+        conversation: conversationFilter(userId),
+      },
     }),
     prisma.notification.count({ where: { userId, readAt: null, type: { notIn: MESSAGE_NOTIFICATION_TYPES } } }),
   ]);
@@ -75,7 +84,12 @@ export async function getUnreadTotals(userId: string) {
 export async function getNotificationSummary(userId: string): Promise<NotificationSummary> {
   const grouped = await prisma.message.groupBy({
     by: ["conversationId"],
-    where: { senderId: { not: userId }, readAt: null, conversation: conversationFilter(userId) },
+    where: {
+      senderId: { not: userId },
+      readAt: null,
+      OR: [{ visibleToId: null }, { visibleToId: userId }],
+      conversation: conversationFilter(userId),
+    },
     _count: { _all: true },
   });
   const counts = new Map(grouped.map((row) => [row.conversationId, row._count._all]));

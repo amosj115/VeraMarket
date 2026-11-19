@@ -799,9 +799,11 @@ model Message {
   createdAt      DateTime     @default(now())
   kind           MessageKind  @default(TEXT)
   offerId        String?
+  visibleToId    String?
   redacted       Boolean      @default(false)
 
   @@index([conversationId, createdAt])
+  @@index([conversationId, visibleToId, createdAt])
   // Unread-marking scans a conversation for rows with readAt IS NULL.
   @@index([conversationId, readAt])
 }
