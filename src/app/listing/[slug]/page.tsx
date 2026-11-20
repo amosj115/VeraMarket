@@ -120,7 +120,7 @@ export default async function ListingPage({ params }: Props) {
         <div>
           {listing.images.length ? (
             <div className="grid grid-cols-2 gap-3">
-              {listing.images.map((image, index) => <Image key={image.id} src={cdnImage(image.url, 1200)} alt={`${listing.title} photo ${index + 1}`} width={1200} height={1200} preload={index === 0} sizes="(max-width: 640px) 100vw, 50vw" className={`aspect-square w-full rounded-lg bg-slate-100 object-cover ${index === 0 ? "col-span-2 sm:aspect-[4/3]" : ""}`} />)}
+              {listing.images.map((image, index) => <Image key={image.id} src={cdnImage(image.url, 1200)} alt={`${listing.title} photo ${index + 1}`} width={1200} height={1200} loading={index === 0 ? "eager" : "lazy"} fetchPriority={index === 0 ? "high" : "auto"} sizes="(max-width: 640px) 100vw, 50vw" className={`aspect-square w-full rounded-lg bg-slate-100 object-cover ${index === 0 ? "col-span-2 sm:aspect-[4/3]" : ""}`} />)}
             </div>
           ) : <div className="flex aspect-video items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">No images</div>}
         </div>
@@ -139,7 +139,7 @@ export default async function ListingPage({ params }: Props) {
             {trust && <p className="mt-2 text-xs font-medium text-brand">Vera Trust {trust.score}/100 · {trust.tier}</p>}
             <FollowButton kind="seller" id={listing.seller.id} label="Follow seller" />
           </div>
-          <ListingActions listingId={listing.id} title={listing.title} priceCents={listing.priceCents} initialLiked={Boolean(existingLike)} initialLikeCount={listing._count.likes} />
+          <ListingActions listingId={listing.id} sellerId={listing.seller.id} title={listing.title} priceCents={listing.priceCents} initialLiked={Boolean(existingLike)} initialLikeCount={listing._count.likes} />
         </div>
       </div>
       {relatedGrid}

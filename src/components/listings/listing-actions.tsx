@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-export function ListingActions({ listingId, title, priceCents, initialLiked, initialLikeCount }: { listingId: string; title: string; priceCents: number; initialLiked: boolean; initialLikeCount: number }) {
+export function ListingActions({ listingId, sellerId, title, priceCents, initialLiked, initialLikeCount }: { listingId: string; sellerId: string; title: string; priceCents: number; initialLiked: boolean; initialLikeCount: number }) {
   const { data: session } = useSession();
   const router = useRouter();
   const [message, setMessage] = useState("Hi, I'm interested in this item. Is it still available?");
@@ -56,6 +56,7 @@ export function ListingActions({ listingId, title, priceCents, initialLiked, ini
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         listingId,
+        sellerId,
         message,
         viaShare: sessionStorage.getItem("share-source") === `LISTING:${listingId}`,
       }),
@@ -76,7 +77,7 @@ export function ListingActions({ listingId, title, priceCents, initialLiked, ini
     const response = await fetch("/api/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingId, message: `Offer: R${Number(offerAmount).toFixed(2)} for ${title}` }),
+      body: JSON.stringify({ listingId, sellerId }),
     });
     const data = await response.json();
     if (!response.ok) {

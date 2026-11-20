@@ -119,6 +119,31 @@ test("declined offers remain visible to both participants", async () => {
   assert.ok(sellerMessages.some((message) => message.body.includes("declined")));
 });
 
+test("ordinary buyer and seller messages remain visible to both participants", async () => {
+  const seller = await makeUser("chat_seller");
+  const buyer = await makeUser("chat_buyer");
+  const listing = await makeListing(seller.id, "Chat Listing");
+  const conversation = await prisma.conversation.create({
+    data: { userAId: buyer.id, userBId: seller.id, listingId: listing.id },
+  });
+
+  await prisma.message.create({
+    data: { conversationId: conversation.id, senderId: buyer.id, body: "Hi, is this item available?" },
+  });
+  await prisma.message.create({
+    data: { conversationId: conversation.id, senderId: seller.id, body: "Yes, it is available." },
+  });
+
+  const buyerMessages = await prisma.message.findMany({
+    where: { conversationId: conversation.id, OR: [{ visibleToId: null }, { visibleToId: buyer.id }] },
+  });
+  const sellerMessages = await prisma.message.findMany({
+    where: { conversationId: conversation.id, OR: [{ visibleToId: null }, { visibleToId: seller.id }] },
+  });
+  assert.equal(buyerMessages.filter((message) => message.body.includes("available")).length, 2);
+  assert.equal(sellerMessages.filter((message) => message.body.includes("available")).length, 2);
+});
+
 test("concurrent acceptance and decline produce one consistent offer outcome", async () => {
   const seller = await makeUser("race_seller");
   const buyer = await makeUser("race_buyer");
