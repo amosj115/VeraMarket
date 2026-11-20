@@ -2,7 +2,6 @@ import NextAuth, { Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { authenticateCredentials } from "@/lib/credentials";
-import { requiresLoginPhoneOtp, verifyLoginPhoneOtp } from "@/lib/login-phone-otp";
 import { loginSchema } from "@/lib/validation/auth";
 
 const nextAuth = NextAuth({
@@ -20,7 +19,6 @@ const nextAuth = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        verificationCode: { label: "Verification code", type: "text" },
       },
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
@@ -28,18 +26,6 @@ const nextAuth = NextAuth({
 
         const user = await authenticateCredentials(parsed.data);
         if (!user) return null;
-        if (requiresLoginPhoneOtp(user)) {
-          const code =
-            typeof credentials.verificationCode === "string"
-              ? credentials.verificationCode
-              : "";
-          if (
-            !user.phone ||
-            (await verifyLoginPhoneOtp(user.id, user.phone, code)) !== "verified"
-          ) {
-            return null;
-          }
-        }
 
         return {
           id: user.id,
@@ -98,24 +84,9 @@ const { handlers, signIn, signOut, auth: nextAuthAuth } = nextAuth;
 
 export { handlers, signIn, signOut };
 
-// Central session gate. NextAuth's own `auth()` still returns a `user` object for a held
-// or deleted account (the `jwt` callback only tombstones the token, leaving `session.user`
-// intact minus its `id`), which made ~40 routes pass `undefined` into Prisma and 500. We
-// return `undefined` for any account that is not ACTIVE so every `await auth()` caller
-// sees a coherent "not signed in" instead of a half-built session.
+// The JWT callback checks account status on each session read and removes the id for
+// held or deleted accounts. Keep callers from treating that tombstoned session as signed in.
 export async function auth() {
   const session = await nextAuthAuth();
-  if (!session?.user?.id) {
-    console.log("auth wrapper: missing session user id");
-    return undefined;
-  }
-  const account = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { status: true },
-  });
-  if (!account || account.status !== "ACTIVE") {
-    console.log(`auth wrapper: account ${session.user.id} not active:`, account?.status);
-    return undefined;
-  }
-  return session;
+  return session?.user?.id ? session : undefined;
 }
